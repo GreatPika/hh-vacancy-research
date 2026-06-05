@@ -1,0 +1,4 @@
+interface:
+  display_name: "hh.ru Vacancy Research"
+  short_description: "Research hh.ru vacancies with confirmed exports"
+  default_prompt: "Use $hh-vacancy-research to turn my hh.ru vacancy research goal into a confirmed profile, collect matching full vacancy cards, and export JSON, Markdown, CSV, and XLSX results."

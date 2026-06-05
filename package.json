@@ -1,0 +1,36 @@
+{
+  "name": "hh-vacancy-research-skill",
+  "version": "0.1.3",
+  "description": "Installer CLI for the hh-vacancy-research Codex skill.",
+  "type": "module",
+  "bin": {
+    "hh-vacancy-research-skill": "bin/hh-vacancy-research-skill.mjs"
+  },
+  "files": [
+    "bin/",
+    "README.md",
+    "SKILL.md",
+    "agents/*.yaml",
+    "requirements.txt",
+    "scripts/*.py",
+    "templates/*.json",
+    "examples/*.json",
+    "examples/*.md"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/GreatPika/hh-vacancy-research.git"
+  },
+  "keywords": [
+    "codex",
+    "agent-skills",
+    "skills",
+    "hh.ru",
+    "vacancy-research"
+  ],
+  "author": "GreatPika",
+  "private": false
+}

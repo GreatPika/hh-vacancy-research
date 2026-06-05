@@ -1,0 +1,64 @@
+{
+  "title": "Example only: hh.ru vacancies mentioning AI coding tools",
+  "hh": {
+    "area": "113",
+    "max_pages": 1,
+    "search_delay_min": 2.0,
+    "search_delay_max": 5.0,
+    "vacancy_delay_min": 2.0,
+    "vacancy_delay_max": 5.0,
+    "filters": {
+      "search_field": [],
+      "experience": [],
+      "schedule": [],
+      "employment": [],
+      "salary": null,
+      "only_with_salary": false,
+      "order_by": "relevance",
+      "period": null
+    }
+  },
+  "match_scope": {
+    "title": true,
+    "company": false,
+    "description": true,
+    "skills": true
+  },
+  "search_terms": {
+    "Claude Code": [
+      "\"Claude Code\""
+    ],
+    "Cursor": [
+      "Cursor"
+    ],
+    "GitHub Copilot": [
+      "\"GitHub Copilot\""
+    ],
+    "AI coding workflow": [
+      "\"AI coding\"",
+      "\"vibe coding\""
+    ]
+  },
+  "term_patterns": {
+    "Claude Code": [
+      "Claude\\s+Code"
+    ],
+    "Cursor": [
+      "(?<![A-Za-z0-9])Cursor(?![A-Za-z0-9])"
+    ],
+    "GitHub Copilot": [
+      "GitHub\\s+Copilot"
+    ],
+    "AI coding workflow": [
+      "AI[-\\s]?coding",
+      "vibe\\s+coding"
+    ]
+  },
+  "exclude_patterns": {
+    "Cursor": [
+      "database\\s+cursor",
+      "SQL\\s+cursor"
+    ]
+  },
+  "notes": "Example only. Do not reuse as a production profile without fresh research and user confirmation."
+}

@@ -1,0 +1,44 @@
+{
+  "title": "",
+  "hh": {
+    "area": "113",
+    "max_pages": 3,
+    "search_delay_min": 2.0,
+    "search_delay_max": 5.0,
+    "vacancy_delay_min": 2.0,
+    "vacancy_delay_max": 5.0,
+    "filters": {
+      "search_field": [],
+      "experience": [],
+      "schedule": [],
+      "employment": [],
+      "salary": null,
+      "only_with_salary": false,
+      "order_by": "relevance",
+      "period": null
+    }
+  },
+  "match_scope": {
+    "title": true,
+    "company": false,
+    "description": true,
+    "skills": true
+  },
+  "search_terms": {
+    "Canonical label": [
+      "\"Exact hh search query\"",
+      "contextual search query"
+    ]
+  },
+  "term_patterns": {
+    "Canonical label": [
+      "Canonical\\s+label"
+    ]
+  },
+  "exclude_patterns": {
+    "Canonical label": [
+      "false\\s+positive\\s+context"
+    ]
+  },
+  "notes": ""
+}
