@@ -17,6 +17,16 @@ from pathlib import Path
 EXCEL_CELL_LIMIT = 32767
 DESCRIPTION_CHUNK_SIZE = 30000
 LARGE_XLSX_ROW_THRESHOLD = 1000
+VACANCY_HEADERS = [
+    "Название вакансии",
+    "Компания",
+    "Ссылка",
+    "Поисковые группы",
+    "Поля совпадения",
+    "Навыки",
+    "Описание",
+]
+DESCRIPTION_CHUNK_HEADERS = ["Строка вакансии", "Название вакансии", "Ссылка", "Часть", "Текст описания"]
 
 
 def require_openpyxl():
@@ -152,17 +162,7 @@ def structured_matched_terms(vacancy: dict[str, object]) -> list[str]:
 
 
 def rows_for(vacancies: list[dict[str, object]]) -> list[list[str]]:
-    rows = [
-        [
-            "Title",
-            "Company",
-            "URL",
-            "Matched groups",
-            "Matched fields",
-            "Skills",
-            "Description",
-        ]
-    ]
+    rows = [list(VACANCY_HEADERS)]
     for vacancy in sorted(vacancies, key=lambda item: str(item.get("title", "")).lower()):
         rows.append(
             [
@@ -304,7 +304,7 @@ def write_xlsx_streaming(path: Path, rows: list[list[str]], Workbook, WriteOnlyC
         for chunk_index, start in enumerate(range(0, len(text), DESCRIPTION_CHUNK_SIZE), start=1):
             if descriptions is None:
                 descriptions = workbook.create_sheet("Descriptions")
-                descriptions.append(["Vacancy row", "Title", "URL", "Chunk", "Description text"])
+                descriptions.append(DESCRIPTION_CHUNK_HEADERS)
             descriptions.append([
                 vacancy_row + 1,
                 xlsx_safe_cell(title),
@@ -332,7 +332,7 @@ def add_description_chunks_sheet(workbook, rows: list[list[str]], Alignment) -> 
         return
 
     sheet = workbook.create_sheet("Descriptions")
-    sheet.append(["Vacancy row", "Title", "URL", "Chunk", "Description text"])
+    sheet.append(DESCRIPTION_CHUNK_HEADERS)
     for vacancy_row, title, url, description in (
         (index, row[0], row[2], row[6])
         for index, row in enumerate(rows[1:], start=1)

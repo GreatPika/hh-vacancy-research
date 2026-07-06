@@ -19,6 +19,7 @@ This skill is a guided workflow. Do not run collection immediately from a vague 
 - Before collection, create a fresh profile from `templates/search_profile.template.json` and validate it with the bundled scraper.
 - The profile is the required settings source. It must explicitly define hh.ru area, native hh search filters, page count, delays, match scope, search queries, validation regexes, exclusions, and notes for risky terms.
 - Keep runtime artifacts outside the skill package. Cache directories, checkpoints, profile drafts, result JSON, and exported files belong in the user's working/output directory.
+- Communicate with the user in Russian by default throughout this skill: discovery questions, profile summaries, progress updates, column explanations, group explanations, limitations, and final reports. Use another language only if the user explicitly requests it.
 - Use the skill-local Python virtual environment when it exists:
   - macOS/Linux: `<skill-dir>/.venv/bin/python`
   - Windows: `<skill-dir>/.venv/Scripts/python.exe`
@@ -134,11 +135,11 @@ The scraper keeps a vacancy only when a `term_patterns` regex matches at least o
 
 ## Final Response Contract
 
-Write the final user-facing response in the user's language. Localize section headings, column explanations, group explanations, limitations, and all prose. Do not mix English and the user's language except for literal file formats, field ids, tool names, or user-approved group labels.
+Write the final user-facing response in Russian by default. Localize section headings, column explanations, group explanations, limitations, and all prose. Do not mix English and Russian except for literal file formats, field ids, tool names, or user-approved group labels. Use another language only if the user explicitly requests it.
 
 Use a short, friendly, decision-useful style. Avoid a long audit dump. Prefer compact paragraphs and short bullets. Keep the final answer focused on what the user can open, what the columns mean, and how to interpret groups.
 
-Use these sections in this order, translated to the user's language:
+Use these sections in this order:
 
 1. Result.
    State what was searched and the final counts in one compact paragraph:
@@ -157,14 +158,14 @@ Use these sections in this order, translated to the user's language:
    - checkpoint file: `[<localized checkpoint label>](</absolute/path/<research-slug>.checkpoint.jsonl>)`
 
 3. Columns.
-   Explain columns in the user's language, briefly:
-   - `Title`: vacancy title from hh.ru.
-   - `Company`: employer/company name parsed from the full vacancy card.
-   - `URL`: hh.ru vacancy URL.
-   - `Matched groups`: canonical search group labels that matched this vacancy.
-   - `Matched fields`: fields where the match was found. Allowed values: `title`, `company`, `description`, `skills`.
-   - `Skills`: key skills parsed from the vacancy card.
-   - `Description`: full vacancy description. In XLSX, descriptions longer than Excel's per-cell limit are continued in the `Descriptions` sheet.
+   Explain exported columns briefly:
+   - `Название вакансии`: vacancy title from hh.ru.
+   - `Компания`: employer/company name parsed from the full vacancy card.
+   - `Ссылка`: hh.ru vacancy URL.
+   - `Поисковые группы`: canonical search group labels that matched this vacancy.
+   - `Поля совпадения`: fields where the match was found. Allowed values in exported rows: `title`, `company`, `description`, `skills`.
+   - `Навыки`: key skills parsed from the vacancy card.
+   - `Описание`: full vacancy description. In XLSX, descriptions longer than Excel's per-cell limit are continued in the `Descriptions` sheet.
 
 4. Groups.
    List every canonical search group and explain what it means in plain language. Use user-approved group labels exactly. Translate group type labels into the user's language:
@@ -178,8 +179,8 @@ Use these sections in this order, translated to the user's language:
 6. Limitations.
    Mention only real limitations observed during the run. Valid limitation types: captcha; blocked pages; parser failures; intentionally limited sample; noisy query groups; user-approved scope limits. Do not invent generic caveats.
 
-For Russian users, use these headings: `Итог`, `Файлы`, `Колонки`, `Группы`, `Правила матчинга`, `Ограничения`.
-For Russian file labels, use: `Профиль`, `Исходный JSON`, `Экспорт JSON`, `Markdown`, `CSV`, `XLSX`, `Checkpoint`.
+Use these Russian headings: `Итог`, `Файлы`, `Колонки`, `Группы`, `Правила матчинга`, `Ограничения`.
+Use these Russian file labels: `Профиль`, `Исходный JSON`, `Экспорт JSON`, `Markdown`, `CSV`, `XLSX`, `Checkpoint`.
 
 ## Native HH Filter Values
 

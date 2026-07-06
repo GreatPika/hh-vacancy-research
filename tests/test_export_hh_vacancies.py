@@ -7,23 +7,23 @@ from scripts.export_hh_vacancies import rows_for, write_markdown
 
 
 class ExportRowsTest(unittest.TestCase):
-    def test_rows_for_labels_matched_group_column(self) -> None:
+    def test_rows_for_uses_russian_column_headers(self) -> None:
         rows = rows_for([])
 
         self.assertEqual(
             rows[0],
             [
-                "Title",
-                "Company",
-                "URL",
-                "Matched groups",
-                "Matched fields",
-                "Skills",
-                "Description",
+                "Название вакансии",
+                "Компания",
+                "Ссылка",
+                "Поисковые группы",
+                "Поля совпадения",
+                "Навыки",
+                "Описание",
             ],
         )
 
-    def test_markdown_export_uses_matched_group_column(self) -> None:
+    def test_markdown_export_uses_russian_column_headers(self) -> None:
         rows = rows_for([])
 
         with TemporaryDirectory() as tmp_dir:
@@ -31,7 +31,7 @@ class ExportRowsTest(unittest.TestCase):
             write_markdown(path, {"title": "Vacancies"}, rows)
 
             self.assertIn(
-                "| Title | Company | URL | Matched groups | Matched fields | Skills | Description |",
+                "| Название вакансии | Компания | Ссылка | Поисковые группы | Поля совпадения | Навыки | Описание |",
                 path.read_text(encoding="utf-8"),
             )
 
