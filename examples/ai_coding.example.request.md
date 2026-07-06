@@ -28,7 +28,7 @@ For a Russian user, use Russian headings and concise Russian prose:
 
 - `Итог`: one compact paragraph with checked/kept/skipped counts and top groups.
 - `Файлы`: inline clickable links, for example `[XLSX](</absolute/path/ai-coding-tools.vacancies.xlsx>)`.
-- `Колонки`: short explanations for `Название вакансии`, `Компания`, `Ссылка`, `Поисковые группы`, `Поля совпадения`, `Навыки`, and `Описание`.
+- `Колонки`: short explanations for the exported table columns from `references/final_response.md`, including salary, experience, schedule, employer industry, link, matching groups, match fields, skills, and description.
 - `Группы`: explain Claude Code, Cursor, GitHub Copilot, and AI coding workflow in plain Russian.
 - `Правила матчинга`: enabled fields and exclusions in one short paragraph.
 - `Ограничения`: only observed blockers and user-approved limits.

@@ -175,6 +175,7 @@ class Vacancy:
     description: str
     url: str
     company: str = ""
+    employer_id: str = ""
     salary: str = ""
     experience: str = ""
     schedule: str = ""
@@ -192,6 +193,8 @@ class VacancyPageParser(HTMLParser):
         super().__init__(convert_charrefs=True)
         self.title_parts: list[str] = []
         self.company_parts: list[str] = []
+        self.company_candidates: list[str] = []
+        self.employer_id = ""
         self.salary_parts: list[str] = []
         self.experience_parts: list[str] = []
         self.employment_parts: list[str] = []
@@ -200,6 +203,7 @@ class VacancyPageParser(HTMLParser):
         self.skill_parts: list[str] = []
         self._capture_title_depth = 0
         self._capture_company_depth = 0
+        self._company_candidate_parts: list[str] = []
         self._capture_salary_depth = 0
         self._capture_experience_depth = 0
         self._capture_employment_depth = 0
@@ -222,7 +226,12 @@ class VacancyPageParser(HTMLParser):
             "vacancy-company-name-text",
             "vacancy-company-name-link",
         }:
-            self._capture_company_depth = 1
+            self.employer_id = self.employer_id or employer_id_from_url(attr.get("href") or "")
+            if self._capture_company_depth:
+                self._capture_company_depth += 1
+            else:
+                self._capture_company_depth = 1
+                self._company_candidate_parts = []
         elif self._capture_company_depth:
             self._capture_company_depth += 1
 
@@ -269,6 +278,10 @@ class VacancyPageParser(HTMLParser):
             self._capture_title_depth -= 1
         if self._capture_company_depth:
             self._capture_company_depth -= 1
+            if self._capture_company_depth == 0:
+                candidate = compact_inline_text(" ".join(self._company_candidate_parts))
+                if candidate:
+                    self.company_candidates.append(candidate)
         if self._capture_salary_depth:
             self._capture_salary_depth -= 1
         if self._capture_experience_depth:
@@ -289,6 +302,7 @@ class VacancyPageParser(HTMLParser):
             self.title_parts.append(data)
         if self._capture_company_depth:
             self.company_parts.append(data)
+            self._company_candidate_parts.append(data)
         if self._capture_salary_depth:
             self.salary_parts.append(data)
         if self._capture_experience_depth:
@@ -323,6 +337,11 @@ def strip_attribute_label(value: str) -> str:
 
 def join_vacancy_attributes(*values: str) -> str:
     return "; ".join(unique(value for value in (strip_attribute_label(item) for item in values) if value))
+
+
+def employer_id_from_url(value: str) -> str:
+    match = re.search(r"/employer/(\d+)", value)
+    return match.group(1) if match else ""
 
 
 def unique(values: Iterable[str]) -> list[str]:
@@ -566,6 +585,9 @@ def extract_company_from_state(page_html: str) -> str:
 
 
 def extract_company_from_page(page_html: str, parser: VacancyPageParser) -> str:
+    candidates = unique(parser.company_candidates)
+    if candidates:
+        return candidates[0]
     return (
         compact_text(" ".join(parser.company_parts))
         or extract_company_from_json_ld(page_html)
@@ -573,34 +595,48 @@ def extract_company_from_page(page_html: str, parser: VacancyPageParser) -> str:
     )
 
 
-def collect_named_values(value: object) -> list[str]:
+def extract_initial_state(page_html: str) -> dict[str, object]:
+    match = re.search(
+        r'<template[^>]+id=["\']HH-Lux-InitialState["\'][^>]*>(.*?)</template>',
+        page_html,
+        re.S | re.I,
+    )
+    if not match:
+        return {}
+    try:
+        parsed = json.loads(html.unescape(match.group(1)).strip())
+    except json.JSONDecodeError:
+        return {}
+    return parsed if isinstance(parsed, dict) else {}
+
+
+def collect_industry_labels(value: object) -> list[str]:
     if isinstance(value, dict):
         found: list[str] = []
-        name = value.get("name")
-        if isinstance(name, str) and name.strip():
-            found.append(compact_inline_text(name))
+        for key in ("trl", "name", "title"):
+            label = value.get(key)
+            if isinstance(label, str) and label.strip():
+                found.append(compact_inline_text(label))
+                break
         for nested in value.values():
-            found.extend(collect_named_values(nested))
+            found.extend(collect_industry_labels(nested))
         return found
     if isinstance(value, list):
         found = []
         for item in value:
-            found.extend(collect_named_values(item))
+            found.extend(collect_industry_labels(item))
         return found
     return []
 
 
-def extract_employer_industry_from_state(page_html: str) -> str:
-    for key in ("industries", "employerIndustries"):
-        for match in re.finditer(rf'"{key}"\s*:\s*(\[[^\]]*\])', page_html):
-            try:
-                parsed = json.loads(match.group(1))
-            except json.JSONDecodeError:
-                continue
-            names = unique(collect_named_values(parsed))
-            if names:
-                return "; ".join(names)
-    return ""
+def extract_employer_industry_from_employer_page(page_html: str) -> str:
+    state = extract_initial_state(page_html)
+    employer_info = state.get("employerInfo")
+    if not isinstance(employer_info, dict):
+        return ""
+    industries = employer_info.get("industries")
+    names = unique(collect_industry_labels(industries))
+    return "; ".join(names)
 
 
 def parse_vacancy(vacancy_id: str, page_html: str) -> Vacancy:
@@ -609,13 +645,13 @@ def parse_vacancy(vacancy_id: str, page_html: str) -> Vacancy:
 
     title = compact_text(" ".join(parser.title_parts)) or extract_title_from_meta(page_html)
     company = extract_company_from_page(page_html, parser)
+    employer_id = parser.employer_id
     salary = compact_inline_text(" ".join(parser.salary_parts))
     experience = compact_inline_text(" ".join(parser.experience_parts))
     schedule = join_vacancy_attributes(
         " ".join(parser.employment_parts),
         *compact_text("".join(parser.schedule_parts)).splitlines(),
     )
-    employer_industry = extract_employer_industry_from_state(page_html)
     description = compact_text("".join(parser.description_parts))
     skills = unique(extract_skills_from_state(page_html) + [compact_text(s) for s in parser.skill_parts])
 
@@ -634,11 +670,47 @@ def parse_vacancy(vacancy_id: str, page_html: str) -> Vacancy:
         description=description,
         url=f"{BASE_URL}/vacancy/{vacancy_id}",
         company=company,
+        employer_id=employer_id,
         salary=salary,
         experience=experience,
         schedule=schedule,
-        employer_industry=employer_industry,
         skills=skills,
+    )
+
+
+def employer_profile_url(employer_id: str) -> str:
+    return f"{BASE_URL}/employer/{employer_id}?hhtmFrom=vacancy&tab=DESCRIPTION"
+
+
+def enrich_employer_industry(
+    args: argparse.Namespace,
+    profile: SearchProfile,
+    vacancy: Vacancy,
+) -> None:
+    if not vacancy.employer_id:
+        return
+    url = employer_profile_url(vacancy.employer_id)
+    cache_path = cache_path_for_url(args.cache_dir, "employers", url, vacancy.employer_id)
+    try:
+        page_html = fetch_url(
+            url,
+            cache_path,
+            profile.hh.vacancy_delay_min,
+            profile.hh.vacancy_delay_max,
+        )
+    except FetchError as exc:
+        print(
+            f"employer {vacancy.employer_id} industry unavailable: {exc}",
+            flush=True,
+        )
+        return
+    vacancy.employer_industry = extract_employer_industry_from_employer_page(page_html)
+
+
+def checkpoint_record_needs_refresh(record: dict[str, object], vacancy: Vacancy) -> bool:
+    return (
+        str(record.get("employer_id", "")) != vacancy.employer_id
+        or str(record.get("employer_industry", "")) != vacancy.employer_industry
     )
 
 
@@ -750,6 +822,16 @@ def collect_vacancies(
                     "entry/file if you intentionally want to reprocess it.",
                     kind="checkpoint",
                 )
+            enrich_employer_industry(args, profile, vacancy)
+            if checkpoint_record_needs_refresh(record, vacancy):
+                append_checkpoint(
+                    args.checkpoint_jsonl,
+                    vacancy,
+                    kept=True,
+                    reason="",
+                    profile_fingerprint=fingerprint,
+                    include_full_text=bool(vacancy.description or vacancy.skills),
+                )
             vacancies.append(vacancy)
         processed_ids.add(vacancy_id)
     processed_since_write = 0
@@ -815,6 +897,7 @@ def collect_vacancies(
             )
             continue
 
+        enrich_employer_industry(args, profile, vacancy)
         print(
             f"vacancy {index}/{len(vacancy_ids)} kept {vacancy_id}: "
             f"{', '.join(vacancy.matched_terms)}",
@@ -850,6 +933,7 @@ def vacancy_to_record(
             "id": vacancy.vacancy_id,
             "title": vacancy.title,
             "company": vacancy.company,
+            "employer_id": vacancy.employer_id,
             "salary": vacancy.salary,
             "experience": vacancy.experience,
             "schedule": vacancy.schedule,
@@ -864,6 +948,7 @@ def vacancy_to_record(
         "id": vacancy.vacancy_id,
         "title": vacancy.title,
         "company": vacancy.company,
+        "employer_id": vacancy.employer_id,
         "salary": vacancy.salary,
         "experience": vacancy.experience,
         "schedule": vacancy.schedule,
@@ -935,10 +1020,10 @@ def vacancy_from_record(record: dict[str, object], profile: SearchProfile) -> Va
         description=str(record.get("description", "")),
         url=str(record.get("url", "")),
         company=str(record.get("company", "")),
+        employer_id=str(record.get("employer_id", "")),
         salary=str(record.get("salary", "")),
         experience=str(record.get("experience", "")),
         schedule=str(record.get("schedule", "")),
-        employer_industry=str(record.get("employer_industry", "")),
         skills=[str(item) for item in skills if isinstance(item, str)],
         matches=[
             match_from_record(item)
@@ -951,14 +1036,7 @@ def vacancy_from_record(record: dict[str, object], profile: SearchProfile) -> Va
     return vacancy
 
 
-def vacancy_from_checkpoint_record(
-    record: dict[str, object],
-    profile: SearchProfile,
-    cache_dir: Path,
-) -> Vacancy | None:
-    if record.get("description") or record.get("skills"):
-        return vacancy_from_record(record, profile)
-
+def cached_vacancy_from_record(record: dict[str, object], profile: SearchProfile, cache_dir: Path) -> Vacancy | None:
     vacancy_id = str(record.get("id", ""))
     url = str(record.get("url") or f"{BASE_URL}/vacancy/{vacancy_id}")
     if not vacancy_id:
@@ -976,6 +1054,53 @@ def vacancy_from_checkpoint_record(
         return None
     vacancy.matches = matching_terms(vacancy, profile)
     if not vacancy.matches:
+        return None
+    return vacancy
+
+
+def parse_cached_vacancy_from_record(record: dict[str, object], cache_dir: Path) -> Vacancy | None:
+    vacancy_id = str(record.get("id", ""))
+    url = str(record.get("url") or f"{BASE_URL}/vacancy/{vacancy_id}")
+    if not vacancy_id:
+        return None
+
+    cache_path = cache_path_for_url(cache_dir, "vacancies", url, vacancy_id)
+    if not cache_path.exists():
+        return None
+    page_html = cache_path.read_text(encoding="utf-8", errors="replace")
+    if blocked_page_reason(page_html):
+        cache_path.unlink(missing_ok=True)
+        return None
+    return parse_vacancy(vacancy_id, page_html)
+
+
+def fill_missing_vacancy_fields(vacancy: Vacancy, cached_vacancy: Vacancy) -> None:
+    if not vacancy.company:
+        vacancy.company = cached_vacancy.company
+    if cached_vacancy.employer_id:
+        vacancy.employer_id = cached_vacancy.employer_id
+    if not vacancy.salary:
+        vacancy.salary = cached_vacancy.salary
+    if not vacancy.experience:
+        vacancy.experience = cached_vacancy.experience
+    if not vacancy.schedule:
+        vacancy.schedule = cached_vacancy.schedule
+
+
+def vacancy_from_checkpoint_record(
+    record: dict[str, object],
+    profile: SearchProfile,
+    cache_dir: Path,
+) -> Vacancy | None:
+    if record.get("description") or record.get("skills"):
+        vacancy = vacancy_from_record(record, profile)
+        cached_vacancy = parse_cached_vacancy_from_record(record, cache_dir)
+        if cached_vacancy is not None:
+            fill_missing_vacancy_fields(vacancy, cached_vacancy)
+        return vacancy
+
+    vacancy = cached_vacancy_from_record(record, profile, cache_dir)
+    if vacancy is None:
         return None
     return vacancy
 
@@ -1028,10 +1153,11 @@ def append_checkpoint(
     kept: bool,
     reason: str,
     profile_fingerprint: str,
+    include_full_text: bool = False,
 ) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     repair_checkpoint_tail(path)
-    record = vacancy_to_record(vacancy, kept=kept, reason=reason, include_full_text=False)
+    record = vacancy_to_record(vacancy, kept=kept, reason=reason, include_full_text=include_full_text)
     record["status"] = "kept" if kept else "skipped"
     record["profile_fingerprint"] = profile_fingerprint
     with path.open("a", encoding="utf-8") as handle:
