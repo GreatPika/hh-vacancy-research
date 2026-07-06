@@ -26,9 +26,9 @@ Show a profile summary before collection:
 
 For a Russian user, use Russian headings and concise Russian prose:
 
-- `Итог`: one compact paragraph with checked/kept/skipped counts and top terms.
+- `Итог`: one compact paragraph with checked/kept/skipped counts and top groups.
 - `Файлы`: inline clickable links, for example `[XLSX](</absolute/path/ai-coding-tools.vacancies.xlsx>)`.
-- `Колонки`: short explanations for Title, Company, URL, Matched terms, Matched fields, Skills, Description in Russian.
+- `Колонки`: short explanations for Title, Company, URL, Matched groups, Matched fields, Skills, Description in Russian.
 - `Группы`: explain Claude Code, Cursor, GitHub Copilot, and AI coding workflow in plain Russian.
 - `Правила матчинга`: enabled fields and exclusions in one short paragraph.
 - `Ограничения`: only observed blockers and user-approved limits.

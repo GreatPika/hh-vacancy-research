@@ -57,8 +57,8 @@ def atomic_write_markdown(path: Path, data: dict[str, object], rows: list[list[s
     with tmp_path.open("w", encoding="utf-8") as handle:
         handle.write(f"# {data.get('title') or 'hh.ru vacancies'}\n\n")
         handle.write(f"Vacancies: {len(rows) - 1}.\n\n")
-        handle.write("| Title | Company | URL | Matched terms | Matched fields | Skills | Description |\n")
-        handle.write("| --- | --- | --- | --- | --- | --- | --- |\n")
+        handle.write("| " + " | ".join(markdown_cell(value) for value in rows[0]) + " |\n")
+        handle.write("| " + " | ".join("---" for _ in rows[0]) + " |\n")
         for row in rows[1:]:
             handle.write("| " + " | ".join(markdown_cell(value) for value in row) + " |\n")
     tmp_path.replace(path)
@@ -157,7 +157,7 @@ def rows_for(vacancies: list[dict[str, object]]) -> list[list[str]]:
             "Title",
             "Company",
             "URL",
-            "Matched terms",
+            "Matched groups",
             "Matched fields",
             "Skills",
             "Description",

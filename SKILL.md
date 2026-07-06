@@ -142,7 +142,7 @@ Use these sections in this order, translated to the user's language:
 
 1. Result.
    State what was searched and the final counts in one compact paragraph:
-   checked vacancies; kept vacancies; skipped vacancies; top matched terms.
+   checked vacancies; kept vacancies; skipped vacancies; top matched groups.
 
 2. Files.
    Provide every produced artifact as a clickable inline Markdown file link with a concise label in the user's language. Do not print bare paths. Use absolute local paths in the link target.
@@ -161,7 +161,7 @@ Use these sections in this order, translated to the user's language:
    - `Title`: vacancy title from hh.ru.
    - `Company`: employer/company name parsed from the full vacancy card.
    - `URL`: hh.ru vacancy URL.
-   - `Matched terms`: canonical search group labels that matched this vacancy.
+   - `Matched groups`: canonical search group labels that matched this vacancy.
    - `Matched fields`: fields where the match was found. Allowed values: `title`, `company`, `description`, `skills`.
    - `Skills`: key skills parsed from the vacancy card.
    - `Description`: full vacancy description. In XLSX, descriptions longer than Excel's per-cell limit are continued in the `Descriptions` sheet.

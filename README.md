@@ -80,7 +80,7 @@ The agent should guide you through:
 3. Profile confirmation.
 4. hh.ru collection.
 5. Export to JSON, Markdown, CSV, and XLSX.
-6. Final report with checked, kept, skipped, and top matched terms.
+6. Final report with checked, kept, skipped, and top matched groups.
 
 ## Supported Filters
 
