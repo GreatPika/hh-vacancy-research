@@ -1,6 +1,6 @@
 ---
 name: hh-vacancy-research
-description: Guided hh.ru vacancy research by a user-confirmed search profile, with title/company/description/skills matching, full-card validation, checkpointing, and JSON/Markdown/CSV/XLSX outputs.
+description: Use when a user wants to research hh.ru vacancies.
 ---
 
 # hh-vacancy-research
@@ -15,7 +15,7 @@ This skill is a guided workflow. Do not run collection immediately from a vague 
   - `scripts/hh_vacancy_scraper.py` for hh.ru search, full-card parsing, matching, checkpointing, and result JSON.
   - `scripts/export_hh_vacancies.py` for JSON, Markdown, CSV, and XLSX export.
 - Do not replace the scraper with ad hoc browser scraping, shell one-liners, unrelated local scripts, the hh.ru API, or manually assembled vacancy lists unless the user explicitly asks to abandon this skill workflow.
-- The official `https://api.hh.ru/areas` endpoint may be used only to look up `hh.area` ids. Do not use hh APIs to collect vacancies.
+- The official hh API may be used only for dictionary lookups: `https://api.hh.ru/areas` for `hh.area` ids and `https://api.hh.ru/industries` for `hh.filters.industry` ids. Do not use hh APIs to collect vacancies.
 - Before collection, create a fresh profile from `templates/search_profile.template.json` and validate it with the bundled scraper.
 - The profile is the required settings source. It must explicitly define hh.ru area, native hh search filters, page count, delays, match scope, search queries, validation regexes, exclusions, and notes for risky terms.
 - Keep runtime artifacts outside the skill package. Cache directories, checkpoints, profile drafts, result JSON, and exported files belong in the user's working/output directory.
@@ -23,31 +23,31 @@ This skill is a guided workflow. Do not run collection immediately from a vague 
 - Use the skill-local Python virtual environment when it exists:
   - macOS/Linux: `<skill-dir>/.venv/bin/python`
   - Windows: `<skill-dir>/.venv/Scripts/python.exe`
-  Fall back to `python3` only when the skill-local virtual environment is absent.
+    Fall back to `python3` only when the skill-local virtual environment is absent.
 
 ## Mandatory Workflow
 
 1. Discovery gate.
    Ask only for filters this skill can represent. Use user-facing hh.ru wording, then translate answers into the profile yourself:
 
-   | Askable filter | User-facing question example | Profile setting |
-   | --- | --- | --- |
-   | hh.ru region | "Which hh.ru region should I search: Russia, Moscow, Saint Petersburg, or another city/country?" | `hh.area` |
-   | Search intent | "What kind of vacancies or mentions are you trying to find? A role, technology, company, requirement, tool, or topic is enough." | `search_terms` |
-   | hh search fields | "Should hh.ru search text everywhere, only in vacancy titles, only in company names, or only in descriptions?" | `hh.filters.search_field` |
-   | Experience | "Which hh.ru experience levels should I include: no experience, 1-3 years, 3-6 years, or 6+ years?" | `hh.filters.experience` |
-   | Schedule | "Which hh.ru schedule filters should I include: remote, full day, shift, flexible, or fly-in/fly-out?" | `hh.filters.schedule` |
-   | Employment | "Which employment types should I include: full-time, part-time, project, volunteer, or probation?" | `hh.filters.employment` |
-   | Company industry | "Should I filter by the employer's business industry, such as IT, media, banking, logistics, or another hh.ru industry?" | `hh.filters.industry` |
-   | Salary | "Should I set a minimum salary or require vacancies with a visible salary?" | `hh.filters.salary`, `hh.filters.only_with_salary` |
-   | Freshness | "Should I limit results to vacancies published in the last N days? hh supports up to 30 days." | `hh.filters.period` |
-   | Sort order | "Should hh.ru sort by relevance, publication date, salary high-to-low, or salary low-to-high?" | `hh.filters.order_by` |
-   | Vacancy title match | "Should a mention in the vacancy title count?" | `match_scope.title` |
-   | Company name match | "Should a mention in the employer/company name count?" | `match_scope.company` |
-   | Full vacancy text match | "Should a mention in the full vacancy text count?" | `match_scope.description` |
-   | Key skills match | "Should a mention in key skills count?" | `match_scope.skills` |
-   | Accepted meanings | "Which meanings must count? I will propose exact words, spellings, Russian/English variants, and product names." | `term_patterns` |
-   | False-positive contexts | "Are there meanings that must not count? Example: SQL cursor when searching for Cursor. I will propose exclusions if the terms are risky." | `exclude_patterns` |
+   | Askable filter          | User-facing question example                                                                                                               | Profile setting                                    |
+   | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------- |
+   | hh.ru region            | "Which hh.ru region should I search: Russia, Moscow, Saint Petersburg, or another city/country?"                                           | `hh.area`                                          |
+   | Search intent           | "What kind of vacancies or mentions are you trying to find? A role, technology, company, requirement, tool, or topic is enough."           | `search_terms`                                     |
+   | hh search fields        | "Should hh.ru search text everywhere, only in vacancy titles, only in company names, or only in descriptions?"                             | `hh.filters.search_field`                          |
+   | Experience              | "Which hh.ru experience levels should I include: no experience, 1-3 years, 3-6 years, or 6+ years?"                                        | `hh.filters.experience`                            |
+   | Schedule                | "Which hh.ru schedule filters should I include: remote, full day, shift, flexible, or fly-in/fly-out?"                                     | `hh.filters.schedule`                              |
+   | Employment              | "Which employment types should I include: full-time, part-time, project, volunteer, or probation?"                                         | `hh.filters.employment`                            |
+   | Company industry        | "Should I filter by the employer's business industry, such as IT, media, banking, logistics, or another hh.ru industry?"                   | `hh.filters.industry`                              |
+   | Salary                  | "Should I set a minimum salary or require vacancies with a visible salary?"                                                                | `hh.filters.salary`, `hh.filters.only_with_salary` |
+   | Freshness               | "Should I limit results to vacancies published in the last N days? hh supports up to 30 days."                                             | `hh.filters.period`                                |
+   | Sort order              | "Should hh.ru sort by relevance, publication date, salary high-to-low, or salary low-to-high?"                                             | `hh.filters.order_by`                              |
+   | Vacancy title match     | "Should a mention in the vacancy title count?"                                                                                             | `match_scope.title`                                |
+   | Company name match      | "Should a mention in the employer/company name count?"                                                                                     | `match_scope.company`                              |
+   | Full vacancy text match | "Should a mention in the full vacancy text count?"                                                                                         | `match_scope.description`                          |
+   | Key skills match        | "Should a mention in key skills count?"                                                                                                    | `match_scope.skills`                               |
+   | Accepted meanings       | "Which meanings must count? I will propose exact words, spellings, Russian/English variants, and product names."                           | `term_patterns`                                    |
+   | False-positive contexts | "Are there meanings that must not count? Example: SQL cursor when searching for Cursor. I will propose exclusions if the terms are risky." | `exclude_patterns`                                 |
 
    Do not ask users for internal implementation settings such as `max_pages`, delays, regex syntax, file paths, checkpoint paths, or output filenames unless the user explicitly asks to control the run. Choose those settings yourself using this skill's defaults.
 
@@ -104,7 +104,7 @@ This skill is a guided workflow. Do not run collection immediately from a vague 
    - enabled match fields;
    - risky short terms and proposed exclusions;
    - exact work directory and artifact paths.
-   Wait for explicit user confirmation before running the scraper.
+     Wait for explicit user confirmation before running the scraper.
 
 5. Collection.
    Run only `scripts/hh_vacancy_scraper.py` with the confirmed profile and with cache, checkpoint, and output paths outside the skill package. Use checkpoint JSONL so interrupted runs can resume. Start with an internal preflight using `--limit-vacancies 2`; if it shows relevant parsed vacancies and no hh.ru blocking, continue to the full run without another user gate. Ask the user again only if preflight reveals noise, parser failure, captcha, or blocked access.
@@ -186,35 +186,35 @@ Use these Russian file labels: `Профиль`, `Исходный JSON`, `Эк�
 
 Translate user-facing choices into these profile values. Do not write display labels into JSON.
 
-| User-facing choice | Profile value |
-| --- | --- |
-| Search everywhere | `hh.filters.search_field: []` |
-| Search vacancy titles | `hh.filters.search_field: ["name"]` |
-| Search company names | `hh.filters.search_field: ["company_name"]` |
-| Search descriptions | `hh.filters.search_field: ["description"]` |
-| No experience | `hh.filters.experience: ["noExperience"]` |
-| 1-3 years | `hh.filters.experience: ["between1And3"]` |
-| 3-6 years | `hh.filters.experience: ["between3And6"]` |
-| 6+ years | `hh.filters.experience: ["moreThan6"]` |
-| Remote | `hh.filters.schedule: ["remote"]` |
-| Full day | `hh.filters.schedule: ["fullDay"]` |
-| Shift work | `hh.filters.schedule: ["shift"]` |
-| Flexible schedule | `hh.filters.schedule: ["flexible"]` |
-| Fly-in/fly-out | `hh.filters.schedule: ["flyInFlyOut"]` |
-| Full-time | `hh.filters.employment: ["full"]` |
-| Part-time | `hh.filters.employment: ["part"]` |
-| Project work | `hh.filters.employment: ["project"]` |
-| Volunteer | `hh.filters.employment: ["volunteer"]` |
-| Probation/internship | `hh.filters.employment: ["probation"]` |
-| Company industry by hh id | `hh.filters.industry: ["7", "7.540"]` |
-| Minimum salary N | `hh.filters.salary: N` |
-| Only vacancies with visible salary | `hh.filters.only_with_salary: true` |
-| Sort by relevance | `hh.filters.order_by: "relevance"` |
-| Sort by newest | `hh.filters.order_by: "publication_time"` |
-| Sort by salary high-to-low | `hh.filters.order_by: "salary_desc"` |
-| Sort by salary low-to-high | `hh.filters.order_by: "salary_asc"` |
-| Last N days, max 30 | `hh.filters.period: N` |
-| No filter for a dimension | empty list, `null`, `false`, or `"relevance"` as appropriate |
+| User-facing choice                 | Profile value                                                |
+| ---------------------------------- | ------------------------------------------------------------ |
+| Search everywhere                  | `hh.filters.search_field: []`                                |
+| Search vacancy titles              | `hh.filters.search_field: ["name"]`                          |
+| Search company names               | `hh.filters.search_field: ["company_name"]`                  |
+| Search descriptions                | `hh.filters.search_field: ["description"]`                   |
+| No experience                      | `hh.filters.experience: ["noExperience"]`                    |
+| 1-3 years                          | `hh.filters.experience: ["between1And3"]`                    |
+| 3-6 years                          | `hh.filters.experience: ["between3And6"]`                    |
+| 6+ years                           | `hh.filters.experience: ["moreThan6"]`                       |
+| Remote                             | `hh.filters.schedule: ["remote"]`                            |
+| Full day                           | `hh.filters.schedule: ["fullDay"]`                           |
+| Shift work                         | `hh.filters.schedule: ["shift"]`                             |
+| Flexible schedule                  | `hh.filters.schedule: ["flexible"]`                          |
+| Fly-in/fly-out                     | `hh.filters.schedule: ["flyInFlyOut"]`                       |
+| Full-time                          | `hh.filters.employment: ["full"]`                            |
+| Part-time                          | `hh.filters.employment: ["part"]`                            |
+| Project work                       | `hh.filters.employment: ["project"]`                         |
+| Volunteer                          | `hh.filters.employment: ["volunteer"]`                       |
+| Probation/internship               | `hh.filters.employment: ["probation"]`                       |
+| Company industry by hh id          | `hh.filters.industry: ["7", "7.540"]`                        |
+| Minimum salary N                   | `hh.filters.salary: N`                                       |
+| Only vacancies with visible salary | `hh.filters.only_with_salary: true`                          |
+| Sort by relevance                  | `hh.filters.order_by: "relevance"`                           |
+| Sort by newest                     | `hh.filters.order_by: "publication_time"`                    |
+| Sort by salary high-to-low         | `hh.filters.order_by: "salary_desc"`                         |
+| Sort by salary low-to-high         | `hh.filters.order_by: "salary_asc"`                          |
+| Last N days, max 30                | `hh.filters.period: N`                                       |
+| No filter for a dimension          | empty list, `null`, `false`, or `"relevance"` as appropriate |
 
 ## Script Operating Procedure
 
@@ -261,36 +261,6 @@ Use this exact operating pattern for every run:
     ```
 
 13. If hh.ru returns captcha, access denied, repeated blocked pages, or obvious mass noise, stop. Report the blocker or proposed profile tightening instead of hammering hh.ru.
-
-## Standard Commands
-
-Validate a profile:
-
-```bash
-<python> skills/hh-vacancy-research/scripts/hh_vacancy_scraper.py \
-  --profile path/to/profile.json \
-  --validate-profile
-```
-
-Preflight:
-
-```bash
-<python> skills/hh-vacancy-research/scripts/hh_vacancy_scraper.py \
-  --profile outputs/example/<research-slug>.profile.json \
-  --cache-dir outputs/example/cache \
-  --output-json outputs/example/<research-slug>.source.json \
-  --checkpoint-jsonl outputs/example/<research-slug>.checkpoint.jsonl \
-  --limit-vacancies 2
-```
-
-Export:
-
-```bash
-<python> skills/hh-vacancy-research/scripts/export_hh_vacancies.py \
-  --source-json outputs/example/<research-slug>.source.json \
-  --output-dir outputs/example \
-  --output-prefix <research-slug>.vacancies
-```
 
 ## Completion Bar
 
