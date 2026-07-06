@@ -175,6 +175,10 @@ class Vacancy:
     description: str
     url: str
     company: str = ""
+    salary: str = ""
+    experience: str = ""
+    schedule: str = ""
+    employer_industry: str = ""
     skills: list[str] = field(default_factory=list)
     matches: list[Match] = field(default_factory=list)
 
@@ -188,10 +192,18 @@ class VacancyPageParser(HTMLParser):
         super().__init__(convert_charrefs=True)
         self.title_parts: list[str] = []
         self.company_parts: list[str] = []
+        self.salary_parts: list[str] = []
+        self.experience_parts: list[str] = []
+        self.employment_parts: list[str] = []
+        self.schedule_parts: list[str] = []
         self.description_parts: list[str] = []
         self.skill_parts: list[str] = []
         self._capture_title_depth = 0
         self._capture_company_depth = 0
+        self._capture_salary_depth = 0
+        self._capture_experience_depth = 0
+        self._capture_employment_depth = 0
+        self._capture_schedule_depth = 0
         self._capture_description_depth = 0
         self._capture_skill_depth = 0
 
@@ -214,6 +226,28 @@ class VacancyPageParser(HTMLParser):
         elif self._capture_company_depth:
             self._capture_company_depth += 1
 
+        if data_qa == "vacancy-salary":
+            self._capture_salary_depth = 1
+        elif self._capture_salary_depth:
+            self._capture_salary_depth += 1
+
+        if data_qa == "vacancy-experience":
+            self._capture_experience_depth = 1
+        elif self._capture_experience_depth:
+            self._capture_experience_depth += 1
+
+        if data_qa == "common-employment-text":
+            self._capture_employment_depth = 1
+        elif self._capture_employment_depth:
+            self._capture_employment_depth += 1
+
+        if data_qa in {"work-schedule-by-days-text", "working-hours-text", "work-formats-text"}:
+            if self.schedule_parts and self.schedule_parts[-1] != "\n":
+                self.schedule_parts.append("\n")
+            self._capture_schedule_depth = 1
+        elif self._capture_schedule_depth:
+            self._capture_schedule_depth += 1
+
         if data_qa == "vacancy-description":
             self._capture_description_depth = 1
         elif self._capture_description_depth:
@@ -235,6 +269,14 @@ class VacancyPageParser(HTMLParser):
             self._capture_title_depth -= 1
         if self._capture_company_depth:
             self._capture_company_depth -= 1
+        if self._capture_salary_depth:
+            self._capture_salary_depth -= 1
+        if self._capture_experience_depth:
+            self._capture_experience_depth -= 1
+        if self._capture_employment_depth:
+            self._capture_employment_depth -= 1
+        if self._capture_schedule_depth:
+            self._capture_schedule_depth -= 1
         if self._capture_description_depth:
             if tag in {"p", "li", "div"}:
                 self.description_parts.append("\n")
@@ -247,6 +289,14 @@ class VacancyPageParser(HTMLParser):
             self.title_parts.append(data)
         if self._capture_company_depth:
             self.company_parts.append(data)
+        if self._capture_salary_depth:
+            self.salary_parts.append(data)
+        if self._capture_experience_depth:
+            self.experience_parts.append(data)
+        if self._capture_employment_depth:
+            self.employment_parts.append(data)
+        if self._capture_schedule_depth:
+            self.schedule_parts.append(data)
         if self._capture_description_depth:
             self.description_parts.append(data)
         if self._capture_skill_depth:
@@ -256,6 +306,23 @@ class VacancyPageParser(HTMLParser):
 def compact_text(value: str) -> str:
     lines = [re.sub(r"[ \t\r\f\v]+", " ", line).strip() for line in value.splitlines()]
     return "\n".join(line for line in lines if line)
+
+
+def compact_inline_text(value: str) -> str:
+    return re.sub(r"\s+", " ", compact_text(value)).strip()
+
+
+def strip_attribute_label(value: str) -> str:
+    return re.sub(
+        r"^(?:Опыт работы|График|Рабочие часы|Формат работы|Занятость)\s*:\s*",
+        "",
+        compact_inline_text(value),
+        flags=re.I,
+    ).strip()
+
+
+def join_vacancy_attributes(*values: str) -> str:
+    return "; ".join(unique(value for value in (strip_attribute_label(item) for item in values) if value))
 
 
 def unique(values: Iterable[str]) -> list[str]:
@@ -506,12 +573,49 @@ def extract_company_from_page(page_html: str, parser: VacancyPageParser) -> str:
     )
 
 
+def collect_named_values(value: object) -> list[str]:
+    if isinstance(value, dict):
+        found: list[str] = []
+        name = value.get("name")
+        if isinstance(name, str) and name.strip():
+            found.append(compact_inline_text(name))
+        for nested in value.values():
+            found.extend(collect_named_values(nested))
+        return found
+    if isinstance(value, list):
+        found = []
+        for item in value:
+            found.extend(collect_named_values(item))
+        return found
+    return []
+
+
+def extract_employer_industry_from_state(page_html: str) -> str:
+    for key in ("industries", "employerIndustries"):
+        for match in re.finditer(rf'"{key}"\s*:\s*(\[[^\]]*\])', page_html):
+            try:
+                parsed = json.loads(match.group(1))
+            except json.JSONDecodeError:
+                continue
+            names = unique(collect_named_values(parsed))
+            if names:
+                return "; ".join(names)
+    return ""
+
+
 def parse_vacancy(vacancy_id: str, page_html: str) -> Vacancy:
     parser = VacancyPageParser()
     parser.feed(page_html)
 
     title = compact_text(" ".join(parser.title_parts)) or extract_title_from_meta(page_html)
     company = extract_company_from_page(page_html, parser)
+    salary = compact_inline_text(" ".join(parser.salary_parts))
+    experience = compact_inline_text(" ".join(parser.experience_parts))
+    schedule = join_vacancy_attributes(
+        " ".join(parser.employment_parts),
+        *compact_text("".join(parser.schedule_parts)).splitlines(),
+    )
+    employer_industry = extract_employer_industry_from_state(page_html)
     description = compact_text("".join(parser.description_parts))
     skills = unique(extract_skills_from_state(page_html) + [compact_text(s) for s in parser.skill_parts])
 
@@ -530,6 +634,10 @@ def parse_vacancy(vacancy_id: str, page_html: str) -> Vacancy:
         description=description,
         url=f"{BASE_URL}/vacancy/{vacancy_id}",
         company=company,
+        salary=salary,
+        experience=experience,
+        schedule=schedule,
+        employer_industry=employer_industry,
         skills=skills,
     )
 
@@ -742,6 +850,10 @@ def vacancy_to_record(
             "id": vacancy.vacancy_id,
             "title": vacancy.title,
             "company": vacancy.company,
+            "salary": vacancy.salary,
+            "experience": vacancy.experience,
+            "schedule": vacancy.schedule,
+            "employer_industry": vacancy.employer_industry,
             "url": vacancy.url,
             "matched_terms": [],
             "matches": [],
@@ -752,6 +864,10 @@ def vacancy_to_record(
         "id": vacancy.vacancy_id,
         "title": vacancy.title,
         "company": vacancy.company,
+        "salary": vacancy.salary,
+        "experience": vacancy.experience,
+        "schedule": vacancy.schedule,
+        "employer_industry": vacancy.employer_industry,
         "url": vacancy.url,
         "matched_terms": vacancy.matched_terms,
         "matches": [match_to_record(match) for match in vacancy.matches],
@@ -819,6 +935,10 @@ def vacancy_from_record(record: dict[str, object], profile: SearchProfile) -> Va
         description=str(record.get("description", "")),
         url=str(record.get("url", "")),
         company=str(record.get("company", "")),
+        salary=str(record.get("salary", "")),
+        experience=str(record.get("experience", "")),
+        schedule=str(record.get("schedule", "")),
+        employer_industry=str(record.get("employer_industry", "")),
         skills=[str(item) for item in skills if isinstance(item, str)],
         matches=[
             match_from_record(item)

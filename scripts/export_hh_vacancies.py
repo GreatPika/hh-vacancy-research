@@ -20,12 +20,19 @@ LARGE_XLSX_ROW_THRESHOLD = 1000
 VACANCY_HEADERS = [
     "Название вакансии",
     "Компания",
+    "Заработная плата",
+    "Опыт",
+    "График",
+    "Отрасль работодателя",
     "Ссылка",
     "Поисковые группы",
     "Поля совпадения",
     "Навыки",
     "Описание",
 ]
+DESCRIPTION_COLUMN_INDEX = VACANCY_HEADERS.index("Описание")
+TITLE_COLUMN_INDEX = VACANCY_HEADERS.index("Название вакансии")
+URL_COLUMN_INDEX = VACANCY_HEADERS.index("Ссылка")
 DESCRIPTION_CHUNK_HEADERS = ["Строка вакансии", "Название вакансии", "Ссылка", "Часть", "Текст описания"]
 
 
@@ -33,6 +40,7 @@ def require_openpyxl():
     try:
         from openpyxl import Workbook
         from openpyxl.cell import WriteOnlyCell
+        from openpyxl.utils import get_column_letter
         from openpyxl.styles import Alignment, Font, PatternFill
         from openpyxl.worksheet.table import Table, TableStyleInfo
     except ModuleNotFoundError as exc:
@@ -41,7 +49,7 @@ def require_openpyxl():
             "openpyxl is required for XLSX export. "
             f"Install dependencies with: pip install -r {requirements}"
         ) from exc
-    return Workbook, WriteOnlyCell, Alignment, Font, PatternFill, Table, TableStyleInfo
+    return Workbook, WriteOnlyCell, get_column_letter, Alignment, Font, PatternFill, Table, TableStyleInfo
 
 
 def atomic_write_text(path: Path, text: str) -> None:
@@ -168,6 +176,10 @@ def rows_for(vacancies: list[dict[str, object]]) -> list[list[str]]:
             [
                 str(vacancy.get("title", "")),
                 str(vacancy.get("company", "")),
+                str(vacancy.get("salary", "")),
+                str(vacancy.get("experience", "")),
+                str(vacancy.get("schedule", "")),
+                str(vacancy.get("employer_industry", "")),
                 str(vacancy.get("url", "")),
                 matched_terms(vacancy),
                 match_fields(vacancy),
@@ -188,6 +200,9 @@ def validate_input(data: object, source_path: Path) -> dict[str, object]:
         if not isinstance(vacancy, dict):
             raise ValueError(f"{source_path}: vacancies[{index}] must be an object")
         for field in ("title", "company", "url", "description"):
+            if field in vacancy and not isinstance(vacancy[field], str):
+                raise ValueError(f"{source_path}: vacancies[{index}].{field} must be a string")
+        for field in ("salary", "experience", "schedule", "employer_industry"):
             if field in vacancy and not isinstance(vacancy[field], str):
                 raise ValueError(f"{source_path}: vacancies[{index}].{field} must be a string")
         if "skills" in vacancy and not isinstance(vacancy["skills"], list):
@@ -231,7 +246,7 @@ def write_csv(path: Path, rows: list[list[str]]) -> None:
 
 
 def write_xlsx(path: Path, rows: list[list[str]]) -> None:
-    Workbook, WriteOnlyCell, Alignment, Font, PatternFill, Table, TableStyleInfo = require_openpyxl()
+    Workbook, WriteOnlyCell, get_column_letter, Alignment, Font, PatternFill, Table, TableStyleInfo = require_openpyxl()
     if len(rows) > LARGE_XLSX_ROW_THRESHOLD:
         write_xlsx_streaming(path, rows, Workbook, WriteOnlyCell)
         return
@@ -245,7 +260,7 @@ def write_xlsx(path: Path, rows: list[list[str]]) -> None:
         sheet.append([xlsx_safe_cell(value) for value in row])
 
     if len(rows) > 1:
-        table_range = f"A1:G{len(rows)}"
+        table_range = f"A1:{get_column_letter(len(rows[0]))}{len(rows)}"
         table = Table(displayName="VacanciesTable", ref=table_range)
         table.tableStyleInfo = TableStyleInfo(
             name="TableStyleMedium2",
@@ -265,11 +280,15 @@ def write_xlsx(path: Path, rows: list[list[str]]) -> None:
     widths = {
         "A": 36,
         "B": 28,
-        "C": 28,
-        "D": 30,
-        "E": 20,
-        "F": 42,
-        "G": 100,
+        "C": 22,
+        "D": 16,
+        "E": 24,
+        "F": 28,
+        "G": 28,
+        "H": 30,
+        "I": 20,
+        "J": 42,
+        "K": 100,
     }
     for column, width in widths.items():
         sheet.column_dimensions[column].width = width
@@ -294,9 +313,9 @@ def write_xlsx_streaming(path: Path, rows: list[list[str]], Workbook, WriteOnlyC
         sheet.append([xlsx_safe_cell(value) for value in row])
 
     long_rows = (
-        (index, row[0], row[2], row[6])
+        (index, row[TITLE_COLUMN_INDEX], row[URL_COLUMN_INDEX], row[DESCRIPTION_COLUMN_INDEX])
         for index, row in enumerate(rows[1:], start=1)
-        if needs_description_chunks(row[6])
+        if needs_description_chunks(row[DESCRIPTION_COLUMN_INDEX])
     )
     descriptions = None
     for vacancy_row, title, url, description in long_rows:
@@ -325,7 +344,7 @@ def write_xlsx_streaming(path: Path, rows: list[list[str]], Workbook, WriteOnlyC
 
 def add_description_chunks_sheet(workbook, rows: list[list[str]], Alignment) -> None:
     has_long_description = any(
-        needs_description_chunks(row[6])
+        needs_description_chunks(row[DESCRIPTION_COLUMN_INDEX])
         for row in rows[1:]
     )
     if not has_long_description:
@@ -334,9 +353,9 @@ def add_description_chunks_sheet(workbook, rows: list[list[str]], Alignment) -> 
     sheet = workbook.create_sheet("Descriptions")
     sheet.append(DESCRIPTION_CHUNK_HEADERS)
     for vacancy_row, title, url, description in (
-        (index, row[0], row[2], row[6])
+        (index, row[TITLE_COLUMN_INDEX], row[URL_COLUMN_INDEX], row[DESCRIPTION_COLUMN_INDEX])
         for index, row in enumerate(rows[1:], start=1)
-        if needs_description_chunks(row[6])
+        if needs_description_chunks(row[DESCRIPTION_COLUMN_INDEX])
     ):
         text = str(description or "")
         for chunk_index, start in enumerate(range(0, len(text), DESCRIPTION_CHUNK_SIZE), start=1):
