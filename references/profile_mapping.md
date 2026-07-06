@@ -20,8 +20,18 @@ Before creating the profile, show the user a complete Russian summary with these
 - все фильтры hh.ru;
 - где hh.ru ищет слова;
 - где полная карточка проверяется на совпадение;
-- рабочая папка;
+- рабочая папка вне пакета skill, по правилу ниже;
 - какие файлы будут созданы.
+
+Create a short lowercase `research-slug` from the confirmed research title before showing the summary.
+
+Use this work directory pattern:
+
+```text
+<external-output-root>/outputs/hh-vacancy-research/<research-slug>/
+```
+
+The resolved absolute path must be outside the skill package because the scraper and exporter reject runtime paths inside the skill package. If the current working directory is the skill package, choose an external output root such as its parent directory or the user's home workspace, then show the absolute work directory in the summary.
 
 Explain files by purpose using this Russian copy:
 

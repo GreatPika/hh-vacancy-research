@@ -5,7 +5,7 @@ description: Use when a user wants to research hh.ru vacancies.
 
 # hh-vacancy-research
 
-Use this skill when a user wants to research hh.ru vacancies by role, company, industry, technology, tool, work practice, requirement, keyword, or key skill.
+Use this skill to research hh.ru vacancies by role, company, industry, technology, tool, work practice, requirement, keyword, or key skill.
 
 This is a guided workflow. Do not collect vacancies until the user has confirmed the completed search plan.
 
@@ -15,7 +15,7 @@ Read the referenced file before each stage:
 
 - `references/discovery_wizard.md` before asking about intent, web research, search topics, or search terms.
 - `references/filter_wizard.md` before asking about hh.ru filters.
-- `references/profile_mapping.md` before creating or validating a profile.
+- `references/profile_mapping.md` before full summary, profile creation, or validation.
 - `references/runbook.md` before running scraper or exporter commands.
 - `references/final_response.md` before reporting results.
 

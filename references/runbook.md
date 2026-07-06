@@ -14,11 +14,13 @@ Use the skill-local Python environment when present:
 
 Create a short lowercase `research-slug` from the confirmed research title.
 
-Use this output directory:
+Use this output directory pattern:
 
 ```text
-outputs/hh-vacancy-research/<research-slug>/
+<external-output-root>/outputs/hh-vacancy-research/<research-slug>/
 ```
+
+Resolve `<external-output-root>` to an absolute path outside the skill package. If the current working directory is the skill package, use an external location such as the parent directory or the user's home workspace.
 
 Keep runtime artifacts outside the skill package:
 
