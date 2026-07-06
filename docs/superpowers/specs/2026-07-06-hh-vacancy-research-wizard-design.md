@@ -22,6 +22,9 @@ The search topics concept is especially underexplained. Users should not have to
 - Use only real supported hh.ru filter values. Do not invent native hh.ru filter values.
 - Explain files, columns, filters, topics, and limitations in user-facing Russian.
 - Keep technical mapping details out of the user-facing wizard unless the user asks.
+- Lead the user step by step: explain the current step, ask one clear question or one compact block at a time, show progress, and name the next step.
+- Keep internal run settings internal unless the user explicitly asks to control them. This includes page count, delays, regex syntax, file paths, checkpoint paths, output names, and slugs.
+- Use only the bundled scraper and exporter for collection and export. Do not replace them with ad hoc browser scraping, shell one-liners, hh.ru vacancy APIs, unrelated local scripts, or manually assembled vacancy lists unless the user explicitly asks to abandon the skill workflow.
 
 ## Architecture
 
@@ -87,6 +90,21 @@ Required user-facing meaning:
 - it is useful when the topic is broad, new, brand-heavy, or ambiguous;
 - if the user declines, the search continues from the user's words, but the term list may be narrower or less current.
 
+Required Russian copy:
+
+```text
+Перед тем как подбирать слова для hh.ru, я могу быстро поискать в интернете.
+
+Зачем это нужно:
+- найти актуальные названия инструментов, компаний и продуктов;
+- собрать русские и английские варианты написания;
+- заметить синонимы и близкие термины;
+- заранее отсеять слова, которые могут давать лишний шум.
+
+Я начну веб-поиск только с вашего подтверждения.
+Искать в интернете или продолжить по тем словам, которые уже есть?
+```
+
 When approved, the agent may search broadly, but should include only explainable terms in the proposed topics. Good evidence includes official product sites, documentation, credible articles, rankings, and repeated independent mentions.
 
 ### Search Topics
@@ -151,6 +169,35 @@ Each filter must include a plain Russian explanation, a default, and an option t
 
 Fixed filter values must come from repository source of truth: `templates/search_profile.schema.json`, `scripts/hh_vacancy_scraper.py`, and `references/profile_mapping.md`. The agent must not invent values.
 
+The filter wizard must not ask the user to configure unsupported native hh.ru filters. Unsupported examples include office/hybrid specifically, employer type, metro, education, language, professional role, and distance sorting. If the user volunteers a text-like constraint, the agent can represent it as search terms, accepted terms, or exclusions. If the user asks for a native-only constraint that the scraper cannot represent, the agent must say so plainly and offer the closest supported alternative.
+
+Default filter choices:
+
+- geography: Russia unless the user asks for another city, country, region, or all hh.ru regions;
+- hh.ru text search fields: search everywhere;
+- optional filters such as experience, schedule, employment, industry, salary, visible salary, and freshness: unset unless the user chooses them;
+- sort order: relevance;
+- full-card match fields: title, description, and skills enabled; company enabled only when the user is searching for company names or company mentions.
+
+The filter wizard must show compact progress after each answer or block. The progress view should include the current topic or topics, already selected filters, unset filters, and the next step. This keeps the user oriented without exposing internal JSON fields.
+
+Example progress copy:
+
+```text
+Настройки поиска сейчас:
+
+Тема: AI-инструменты
+Регион: Россия
+Где искать на hh.ru: везде
+Опыт: без фильтра
+График: без фильтра
+
+Следующий шаг: график работы.
+Оставляем без фильтра или ограничиваем?
+```
+
+If the user does not understand a filter, the agent must offer help and explain it using only real supported values or verified dictionary values. It should not invent examples that cannot be represented in the profile.
+
 Geography and industry are dictionary-backed filters:
 
 - for a specific city, country, or region, the agent must look up real ids in `https://api.hh.ru/areas`;
@@ -182,6 +229,7 @@ Required Russian copy:
 
 - Профиль поиска — здесь сохранены выбранные вами настройки. Он нужен, чтобы потом повторить или поправить этот же поиск.
 - Исходные результаты — это полный результат сбора до удобной выгрузки. Нужен для проверки и повторного экспорта.
+- Экспорт JSON — те же найденные вакансии в удобной структуре для других программ или повторной обработки.
 - Таблица XLSX — основной файл для просмотра в Excel или Google Sheets.
 - CSV — упрощённая таблица для импорта в другие инструменты.
 - Markdown — удобная текстовая версия для быстрого просмотра.
@@ -194,11 +242,23 @@ The agent must wait for explicit confirmation before creating the profile or run
 
 After confirmation, the agent creates a fresh profile from `templates/search_profile.template.json` in `outputs/hh-vacancy-research/<research-slug>/`. It must not reuse `examples/*.json` as production profiles.
 
+The profile should use the skill defaults unless the user explicitly chose otherwise: `hh.max_pages` 3, search delays 2.0-5.0 seconds, vacancy delays 2.0-5.0 seconds, empty optional filter lists, `salary: null`, `only_with_salary: false`, `order_by: "relevance"`, and `period: null`.
+
 The agent validates the profile with `scripts/hh_vacancy_scraper.py --validate-profile`. If validation fails, the agent fixes the confirmed mapping or returns to the relevant wizard choice. It must not bypass validation.
 
 The agent then runs an internal preflight with `--limit-vacancies 2`. If preflight finds relevant parsed vacancies and no hh.ru blocking, the full run continues without another user confirmation. If preflight shows noise, captcha, parser failure, access denial, or poor terms, the agent stops and returns to the appropriate wizard step.
 
 Full collection must use the confirmed profile, cache directory, checkpoint JSONL, and output JSON outside the skill package.
+
+The runbook must use the skill-local Python environment when present:
+
+- macOS/Linux: `<skill-dir>/.venv/bin/python`;
+- Windows: `<skill-dir>/.venv/Scripts/python.exe`;
+- fallback: `python3` only when the skill-local environment is absent.
+
+If a search key produces repeated noisy pages during collection, the agent must stop, tighten the profile, and explain the change. Checkpoint resume applies only when repeating the same confirmed profile. After changing search terms, accepted terms, exclusions, native filters, or match fields, the agent may reuse the same cache directory but must use a new checkpoint file or rely on checkpoint fingerprinting to ignore old rows.
+
+Interrupted runs should resume only when the profile is unchanged, using the same cache directory and checkpoint JSONL.
 
 Export must use `scripts/export_hh_vacancies.py`. XLSX is required. If `openpyxl` is missing, the agent may run `npx hh-vacancy-research-skill install --force` to recreate the skill-local environment, or report a setup blocker.
 
@@ -216,6 +276,8 @@ The final response must be in Russian unless the user explicitly requested anoth
 
 It must not end with only file links or only a numeric summary.
 
+The final response should preserve the existing Russian section structure unless the implementation plan intentionally changes it: `Итог`, `Файлы`, `Колонки`, `Группы`, `Правила матчинга`, `Ограничения`. Produced file links should include profile, source JSON, export JSON, Markdown, CSV, XLSX, and checkpoint.
+
 ## Testing And Verification
 
 The implementation should be verified with documentation-level and behavior-level checks:
@@ -226,6 +288,8 @@ The implementation should be verified with documentation-level and behavior-leve
 - Confirm fixed filter values match `templates/search_profile.schema.json` and `scripts/hh_vacancy_scraper.py`.
 - Run profile validation tests or existing project tests if implementation changes affect scripts or templates.
 - Use at least one pressure scenario to check that the agent offers web search, waits for approval, explains topics in Russian, defaults to one topic, and does not start collection before confirmation.
+- Include a pressure scenario where the user asks for unsupported filters, ambiguous geography or industry, and multiple optional search topics.
+- For skill edits, follow the documentation TDD expectation from `superpowers:writing-skills`: define pressure scenarios before implementation and verify the rewritten skill against them.
 
 ## Open Decisions
 
