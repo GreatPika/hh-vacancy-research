@@ -11,6 +11,8 @@ import sys
 from collections import Counter
 from pathlib import Path
 
+# pyright: reportMissingModuleSource=false
+
 
 EXCEL_CELL_LIMIT = 32767
 DESCRIPTION_CHUNK_SIZE = 30000
@@ -101,12 +103,26 @@ def markdown_cell(value: object) -> str:
     return str(value or "").replace("|", "\\|").replace("\n", "<br>").strip()
 
 
+def object_list(value: object) -> list[object]:
+    return value if isinstance(value, list) else []
+
+
+def object_dict(value: object) -> dict[str, object]:
+    return value if isinstance(value, dict) else {}
+
+
+def string_list(value: object) -> list[str]:
+    return [item for item in object_list(value) if isinstance(item, str)]
+
+
+def dict_list(value: object) -> list[dict[str, object]]:
+    return [item for item in object_list(value) if isinstance(item, dict)]
+
+
 def match_fields(vacancy: dict[str, object]) -> str:
     fields: list[str] = []
-    for match in vacancy.get("matches", []):
-        if not isinstance(match, dict):
-            continue
-        for field in match.get("fields", []):
+    for match in dict_list(vacancy.get("matches")):
+        for field in object_list(match.get("fields")):
             if isinstance(field, str) and field not in fields:
                 fields.append(field)
     return ", ".join(fields)
@@ -118,8 +134,8 @@ def matched_terms(vacancy: dict[str, object]) -> str:
         return ", ".join(str(term) for term in terms)
     return ", ".join(
         str(match.get("term"))
-        for match in vacancy.get("matches", [])
-        if isinstance(match, dict) and match.get("term")
+        for match in dict_list(vacancy.get("matches"))
+        if match.get("term")
     )
 
 
@@ -128,9 +144,7 @@ def structured_matched_terms(vacancy: dict[str, object]) -> list[str]:
     if isinstance(terms, list):
         return [term for term in terms if isinstance(term, str) and term]
     result: list[str] = []
-    for match in vacancy.get("matches", []):
-        if not isinstance(match, dict):
-            continue
+    for match in dict_list(vacancy.get("matches")):
         term = match.get("term")
         if isinstance(term, str) and term:
             result.append(term)
@@ -157,7 +171,7 @@ def rows_for(vacancies: list[dict[str, object]]) -> list[list[str]]:
                 str(vacancy.get("url", "")),
                 matched_terms(vacancy),
                 match_fields(vacancy),
-                ", ".join(str(skill) for skill in vacancy.get("skills", [])),
+                ", ".join(str(skill) for skill in object_list(vacancy.get("skills"))),
                 str(vacancy.get("description", "")),
             ]
         )
@@ -192,11 +206,11 @@ def load_json_object(path: Path) -> dict[str, object]:
 
 
 def recompute_summary(data: dict[str, object]) -> dict[str, object]:
-    vacancies = [item for item in data.get("vacancies", []) if isinstance(item, dict)]
+    vacancies = dict_list(data.get("vacancies"))
     counter: Counter[str] = Counter()
     for vacancy in vacancies:
         counter.update(structured_matched_terms(vacancy))
-    summary = dict(data.get("summary", {})) if isinstance(data.get("summary"), dict) else {}
+    summary = dict(object_dict(data.get("summary")))
     summary["kept"] = len(vacancies)
     summary["top_terms"] = dict(counter.most_common())
     return summary
@@ -224,6 +238,8 @@ def write_xlsx(path: Path, rows: list[list[str]]) -> None:
 
     workbook = Workbook()
     sheet = workbook.active
+    if sheet is None:
+        raise ValueError("workbook has no active worksheet")
     sheet.title = "Vacancies"
     for row in rows:
         sheet.append([xlsx_safe_cell(value) for value in row])
@@ -260,7 +276,9 @@ def write_xlsx(path: Path, rows: list[list[str]]) -> None:
     for row in sheet.iter_rows(min_row=2):
         for cell in row:
             cell.alignment = Alignment(vertical="top", wrap_text=True)
-        sheet.row_dimensions[row[0].row].height = 90
+        row_number = row[0].row
+        if row_number is not None:
+            sheet.row_dimensions[row_number].height = 90
     sheet.freeze_panes = "A2"
     add_description_chunks_sheet(workbook, rows, Alignment)
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -406,7 +424,7 @@ def main() -> int:
     validate_work_paths(args, outputs)
     data = load_json_object(args.source_json)
     require_openpyxl()
-    vacancies = [item for item in data.get("vacancies", []) if isinstance(item, dict)]
+    vacancies = dict_list(data.get("vacancies"))
     rows = rows_for(vacancies)
 
     write_json(outputs["json"], data)

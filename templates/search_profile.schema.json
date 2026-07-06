@@ -104,6 +104,14 @@
               },
               "uniqueItems": true
             },
+            "industry": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^\\d+(\\.\\d+)?$"
+              },
+              "uniqueItems": true
+            },
             "salary": {
               "type": [
                 "integer",

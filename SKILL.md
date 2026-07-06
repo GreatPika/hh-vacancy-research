@@ -37,6 +37,7 @@ This skill is a guided workflow. Do not run collection immediately from a vague 
    | Experience | "Which hh.ru experience levels should I include: no experience, 1-3 years, 3-6 years, or 6+ years?" | `hh.filters.experience` |
    | Schedule | "Which hh.ru schedule filters should I include: remote, full day, shift, flexible, or fly-in/fly-out?" | `hh.filters.schedule` |
    | Employment | "Which employment types should I include: full-time, part-time, project, volunteer, or probation?" | `hh.filters.employment` |
+   | Company industry | "Should I filter by the employer's business industry, such as IT, media, banking, logistics, or another hh.ru industry?" | `hh.filters.industry` |
    | Salary | "Should I set a minimum salary or require vacancies with a visible salary?" | `hh.filters.salary`, `hh.filters.only_with_salary` |
    | Freshness | "Should I limit results to vacancies published in the last N days? hh supports up to 30 days." | `hh.filters.period` |
    | Sort order | "Should hh.ru sort by relevance, publication date, salary high-to-low, or salary low-to-high?" | `hh.filters.order_by` |
@@ -49,12 +50,17 @@ This skill is a guided workflow. Do not run collection immediately from a vague 
 
    Do not ask users for internal implementation settings such as `max_pages`, delays, regex syntax, file paths, checkpoint paths, or output filenames unless the user explicitly asks to control the run. Choose those settings yourself using this skill's defaults.
 
-   Do not ask about filters this scraper cannot represent: office/hybrid specifically, employer type, metro, industry, education, language, or professional role. If the user volunteers one, either encode it as ordinary text in `search_terms`/`term_patterns`/`exclude_patterns`, or state that this skill cannot apply it as a native hh.ru filter.
+   Do not ask about filters this scraper cannot represent: office/hybrid specifically, employer type, metro, education, language, or professional role. If the user volunteers one, either encode it as ordinary text in `search_terms`/`term_patterns`/`exclude_patterns`, or state that this skill cannot apply it as a native hh.ru filter.
 
    Region defaults:
    - default to Russia: `hh.area = "113"`;
    - for all hh.ru regions with no country/region limit, use `hh.area = "0"`;
    - for a specific country, region, or city, look up the current id in the official hh areas endpoint: `https://api.hh.ru/areas`. Do not guess area ids.
+
+   Industry defaults:
+   - do not apply an industry filter unless the user asks for it;
+   - look up industry ids in the official hh industries endpoint: `https://api.hh.ru/industries`;
+   - use group ids such as `7` for broad industries or nested ids such as `7.540` for narrower industries. Do not guess industry ids.
 
 2. Query/profile research.
    Do not expect the user to supply ready hh.ru queries or exact regex words. Use the user's intent to research or derive:
@@ -117,7 +123,7 @@ Profiles must contain:
 
 - `title`: human-readable research title.
 - `hh`: `area`, `max_pages`, `search_delay_min`, `search_delay_max`, `vacancy_delay_min`, `vacancy_delay_max`.
-- `hh.filters`: optional native hh search filters: `search_field`, `experience`, `schedule`, `employment`, `salary`, `only_with_salary`, `order_by`, `period`.
+- `hh.filters`: optional native hh search filters: `search_field`, `experience`, `schedule`, `employment`, `industry`, `salary`, `only_with_salary`, `order_by`, `period`.
 - `match_scope`: booleans for `title`, `company`, `description`, and `skills`; at least one must be true.
 - `search_terms`: canonical label to hh search queries.
 - `term_patterns`: canonical label to regex patterns used for full-card validation.
@@ -199,6 +205,7 @@ Translate user-facing choices into these profile values. Do not write display la
 | Project work | `hh.filters.employment: ["project"]` |
 | Volunteer | `hh.filters.employment: ["volunteer"]` |
 | Probation/internship | `hh.filters.employment: ["probation"]` |
+| Company industry by hh id | `hh.filters.industry: ["7", "7.540"]` |
 | Minimum salary N | `hh.filters.salary: N` |
 | Only vacancies with visible salary | `hh.filters.only_with_salary: true` |
 | Sort by relevance | `hh.filters.order_by: "relevance"` |

@@ -11,21 +11,24 @@ from __future__ import annotations
 import argparse
 import hashlib
 import html
+import importlib
 import json
 import math
 import os
 import random
 import re
+import ssl
 import sys
 import time
 from collections import Counter
 from dataclasses import dataclass, field
+from functools import lru_cache
 from html.parser import HTMLParser
 from pathlib import Path
 from typing import Iterable
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
-from urllib.request import HTTPCookieProcessor, Request, build_opener
+from urllib.request import HTTPSHandler, HTTPCookieProcessor, Request, build_opener
 
 
 BASE_URL = "https://hh.ru"
@@ -45,6 +48,7 @@ HH_FILTER_FIELDS = {
     "experience",
     "schedule",
     "employment",
+    "industry",
     "salary",
     "only_with_salary",
     "order_by",
@@ -129,6 +133,7 @@ class HhFilters:
     experience: tuple[str, ...] = ()
     schedule: tuple[str, ...] = ()
     employment: tuple[str, ...] = ()
+    industry: tuple[str, ...] = ()
     salary: int | None = None
     only_with_salary: bool = False
     order_by: str = "relevance"
@@ -193,7 +198,7 @@ class VacancyPageParser(HTMLParser):
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         attr = dict(attrs)
         data_qa = attr.get("data-qa", "")
-        klass = attr.get("class", "")
+        klass = attr.get("class") or ""
 
         if tag == "h1" and data_qa == "vacancy-title":
             self._capture_title_depth = 1
@@ -265,6 +270,46 @@ def unique(values: Iterable[str]) -> list[str]:
     return result
 
 
+def certificate_error_help() -> str:
+    return (
+        "Python could not verify the TLS certificate. Install dependencies with "
+        "`pip install -r requirements.txt` so the scraper can retry with certifi."
+    )
+
+
+def is_certificate_verification_error(exc: URLError) -> bool:
+    reason = exc.reason
+    return isinstance(reason, ssl.SSLCertVerificationError)
+
+
+@lru_cache(maxsize=1)
+def certifi_opener():
+    try:
+        certifi = importlib.import_module("certifi")
+    except ModuleNotFoundError:
+        return None
+    certifi_where = getattr(certifi, "where", None)
+    if not callable(certifi_where):
+        return None
+    context = ssl.create_default_context(cafile=str(certifi_where()))
+    return build_opener(HTTPCookieProcessor(), HTTPSHandler(context=context))
+
+
+def read_request_body(request: Request) -> str:
+    try:
+        with OPENER.open(request, timeout=30) as response:
+            return response.read().decode("utf-8", errors="replace")
+    except URLError as exc:
+        if not is_certificate_verification_error(exc):
+            raise
+        opener = certifi_opener()
+        if opener is None:
+            raise FetchError(certificate_error_help(), kind="ssl") from exc
+        print("Python certificate verification failed; retrying with certifi CA bundle.", flush=True)
+        with opener.open(request, timeout=30) as response:
+            return response.read().decode("utf-8", errors="replace")
+
+
 def fetch_url(url: str, cache_path: Path, min_delay: float, max_delay: float) -> str:
     if cache_path.exists():
         cached = cache_path.read_text(encoding="utf-8", errors="replace")
@@ -297,8 +342,7 @@ def fetch_url(url: str, cache_path: Path, min_delay: float, max_delay: float) ->
         print(f"sleep {delay:.1f}s before fetch: {url}", flush=True)
         time.sleep(delay)
         try:
-            with OPENER.open(request, timeout=30) as response:
-                body = response.read().decode("utf-8", errors="replace")
+            body = read_request_body(request)
         except HTTPError as exc:
             last_error = exc
             if exc.code in PERMANENT_HTTP_STATUSES:
@@ -342,6 +386,8 @@ def search_url(query: str, hh: HhSettings, page: int) -> str:
         params.append(("schedule", schedule))
     for employment in filters.employment:
         params.append(("employment", employment))
+    for industry in filters.industry:
+        params.append(("industry", industry))
     if filters.salary is not None:
         params.append(("salary", filters.salary))
     if filters.only_with_salary:
@@ -754,23 +800,29 @@ def profile_fingerprint(profile: SearchProfile) -> str:
 
 
 def match_from_record(record: dict[str, object]) -> Match:
+    raw_fields = record.get("fields", [])
+    fields = raw_fields if isinstance(raw_fields, list) else []
     return Match(
         term=str(record.get("term", "")),
-        fields=[str(item) for item in record.get("fields", []) if isinstance(item, str)],
+        fields=[str(item) for item in fields if isinstance(item, str)],
     )
 
 
 def vacancy_from_record(record: dict[str, object], profile: SearchProfile) -> Vacancy:
+    raw_skills = record.get("skills", [])
+    skills = raw_skills if isinstance(raw_skills, list) else []
+    raw_matches = record.get("matches", [])
+    matches = raw_matches if isinstance(raw_matches, list) else []
     vacancy = Vacancy(
         vacancy_id=str(record.get("id", "")),
         title=str(record.get("title", "")),
         description=str(record.get("description", "")),
         url=str(record.get("url", "")),
         company=str(record.get("company", "")),
-        skills=[str(item) for item in record.get("skills", []) if isinstance(item, str)],
+        skills=[str(item) for item in skills if isinstance(item, str)],
         matches=[
             match_from_record(item)
-            for item in record.get("matches", [])
+            for item in matches
             if isinstance(item, dict)
         ],
     )
@@ -996,6 +1048,7 @@ def filters_to_record(filters: HhFilters) -> dict[str, object]:
         "experience": list(filters.experience),
         "schedule": list(filters.schedule),
         "employment": list(filters.employment),
+        "industry": list(filters.industry),
         "salary": filters.salary,
         "only_with_salary": filters.only_with_salary,
         "order_by": filters.order_by,
@@ -1023,6 +1076,31 @@ def require_filter_list(
             raise ValueError(
                 f"{path}: hh.filters.{key}[{index}] has unsupported value {normalized!r}; "
                 f"allowed values: {', '.join(sorted(allowed_values))}"
+            )
+        if normalized not in result:
+            result.append(normalized)
+    return tuple(result)
+
+
+def require_hh_id_list(
+    raw: dict[str, object],
+    key: str,
+    path: Path,
+) -> tuple[str, ...]:
+    value = raw.get(key, [])
+    if value is None:
+        return ()
+    if not isinstance(value, list):
+        raise ValueError(f"{path}: hh.filters.{key} must be a list")
+    result: list[str] = []
+    for index, item in enumerate(value, start=1):
+        if not isinstance(item, str) or not item.strip():
+            raise ValueError(f"{path}: hh.filters.{key}[{index}] must be a non-empty string")
+        normalized = item.strip()
+        if not re.fullmatch(r"\d+(?:\.\d+)?", normalized):
+            raise ValueError(
+                f"{path}: hh.filters.{key}[{index}] must be an hh.ru dictionary id, "
+                "for example '7' or '7.540'"
             )
         if normalized not in result:
             result.append(normalized)
@@ -1074,6 +1152,7 @@ def load_hh_filters(hh_raw: dict[str, object], path: Path) -> HhFilters:
         experience=require_filter_list(filters_raw, "experience", EXPERIENCE_VALUES, path),
         schedule=require_filter_list(filters_raw, "schedule", SCHEDULE_VALUES, path),
         employment=require_filter_list(filters_raw, "employment", EMPLOYMENT_VALUES, path),
+        industry=require_hh_id_list(filters_raw, "industry", path),
         salary=require_optional_positive_int(filters_raw, "salary", path),
         only_with_salary=only_with_salary,
         order_by=order_by,
@@ -1128,7 +1207,8 @@ def load_profile(path: Path) -> SearchProfile:
 
     match_scope_raw = require_dict(raw, "match_scope", path)
     unknown_scope_fields = set(match_scope_raw) - set(ENABLED_FIELDS)
-    missing_scope_fields = set(REQUIRED_MATCH_FIELDS) - set(match_scope_raw)
+    required_scope_fields: set[str] = set(REQUIRED_MATCH_FIELDS)
+    missing_scope_fields = required_scope_fields - set(match_scope_raw)
     if unknown_scope_fields:
         raise ValueError(f"{path}: unknown match_scope fields: {', '.join(sorted(unknown_scope_fields))}")
     if missing_scope_fields:

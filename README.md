@@ -94,6 +94,7 @@ The skill asks users about filters that can be represented by the bundled scrape
 | Experience | hh.ru experience levels: no experience, 1-3 years, 3-6 years, 6+ years. |
 | Schedule | hh.ru schedule filters: remote, full day, shift, flexible, fly-in/fly-out. |
 | Employment | hh.ru employment filters: full-time, part-time, project, volunteer, probation/internship. |
+| Company industry | Employer business industry from `https://api.hh.ru/industries`, such as IT, media, banking, logistics, or a narrower nested industry. |
 | Salary | Minimum salary and whether to include only vacancies with visible salary. |
 | Freshness | Vacancies published in the last N days, up to hh.ru's 30-day limit. |
 | Sort order | Relevance, newest first, salary high-to-low, or salary low-to-high. |
@@ -101,7 +102,7 @@ The skill asks users about filters that can be represented by the bundled scrape
 | Accepted meanings | Exact words, spellings, Russian/English variants, product names, and regex patterns that should count. |
 | Exclusions | False-positive contexts that suppress a match, such as SQL cursor when searching for Cursor. |
 
-The skill does not apply native hh.ru filters for office/hybrid specifically, employer type, metro, industry, education, language, or professional role. The agent can still encode user-provided constraints as search terms, match patterns, or exclusions when that is practical.
+The skill does not apply native hh.ru filters for office/hybrid specifically, employer type, metro, education, language, or professional role. The agent can still encode user-provided constraints as search terms, match patterns, or exclusions when that is practical.
 
 ## Operational Notes
 
