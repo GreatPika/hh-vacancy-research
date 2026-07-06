@@ -50,7 +50,7 @@ This skill is a guided workflow. Do not run collection immediately from a vague 
 
    Do not ask users for internal implementation settings such as `max_pages`, delays, regex syntax, file paths, checkpoint paths, or output filenames unless the user explicitly asks to control the run. Choose those settings yourself using this skill's defaults.
 
-   Do not ask about filters this scraper cannot represent: office/hybrid specifically, employer type, metro, education, language, or professional role. If the user volunteers one, either encode it as ordinary text in `search_terms`/`term_patterns`/`exclude_patterns`, or state that this skill cannot apply it as a native hh.ru filter.
+   Do not ask about filters or sort modes this scraper cannot represent: office/hybrid specifically, employer type, metro, education, language, professional role, or distance sorting. If the user volunteers a text-like constraint, encode it as ordinary text in `search_terms`/`term_patterns`/`exclude_patterns`; for native-only constraints such as distance sorting, state that this skill cannot apply it.
 
    Region defaults:
    - default to Russia: `hh.area = "113"`;

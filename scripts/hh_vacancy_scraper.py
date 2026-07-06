@@ -42,7 +42,7 @@ SEARCH_FIELD_VALUES = {"name", "company_name", "description"}
 EXPERIENCE_VALUES = {"noExperience", "between1And3", "between3And6", "moreThan6"}
 SCHEDULE_VALUES = {"remote", "fullDay", "shift", "flexible", "flyInFlyOut"}
 EMPLOYMENT_VALUES = {"full", "part", "project", "volunteer", "probation"}
-ORDER_BY_VALUES = {"publication_time", "salary_desc", "salary_asc", "relevance", "distance"}
+ORDER_BY_VALUES = {"publication_time", "salary_desc", "salary_asc", "relevance"}
 HH_FILTER_FIELDS = {
     "search_field",
     "experience",
