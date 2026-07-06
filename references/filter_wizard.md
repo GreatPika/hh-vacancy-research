@@ -13,6 +13,20 @@ Use this reference after search topics and terms are confirmed.
 - Recommend leaving optional filters unset when the filter may hide relevant vacancies.
 - If a value is already obvious from the user's request, pre-fill it and ask for confirmation.
 
+## Stepwise Interaction
+
+Walk through filter blocks one at a time. Do not present all filter blocks in one large list and ask the user to accept or edit everything at once.
+
+For each block:
+
+- explain what the filter controls;
+- show the recommended default or pre-filled value;
+- show only the options for that block;
+- ask one clear question;
+- after the answer, show compact progress and name the next block.
+
+You may group only tightly coupled choices in the same question, such as minimum salary and "only vacancies with salary". If the user explicitly asks to keep all recommended defaults, skip the remaining optional filter questions and proceed to the full summary.
+
 ## Unsupported Native Filters
 
 Do not ask the user to configure these as native hh.ru filters:
@@ -155,7 +169,7 @@ At least one match field must be enabled.
 
 ## Progress Updates
 
-Show compact progress after each answer or block. Include the current topic or topics, selected filters, filters still left unset, and the next step. Do not expose JSON field names unless the user asks.
+Show compact progress after each answer. Include the current topic or topics, selected filters, filters still left unset, and the next filter block. Do not expose JSON field names unless the user asks.
 
 Use this style:
 
