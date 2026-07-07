@@ -171,19 +171,35 @@ At least one match field must be enabled.
 
 Show compact progress after each answer. Include the current topic or topics, selected filters, filters still left unset, and the next filter block. Do not expose JSON field names unless the user asks.
 
+Use Markdown formatting to make the current settings visually separate from the active question.
+
 Use this style:
 
 ```text
-Настройки поиска сейчас:
+**Текущие настройки поиска**
 
-Тема: AI-инструменты
-Регион: Россия
-Где искать на hh.ru: везде
-Опыт: без фильтра
-График: без фильтра
+> **Темы:** AI-инструменты
+> **Регион:** Россия
+> **Где искать на hh.ru:** везде
+> **Опыт:** без фильтра
+> **График:** без фильтра
+> **Занятость:** без фильтра
+> **Отрасль работодателя:** без фильтра
+> **Зарплата:** без фильтра
+> **Свежесть:** еще не выбрана
 
-Следующий шаг: график работы.
-Оставляем без фильтра или ограничиваем?
+---
+
+**Следующий фильтр: график работы**
+
+Если график не важен, лучше оставить без фильтра, чтобы не потерять подходящие вакансии.
+
+Что выбираем?
+
+1. **Без фильтра** — рекомендую.
+2. **Удаленная работа**
+3. **Полный день**
+4. **Другой поддерживаемый график**
 ```
 
 If the user does not understand a filter, explain it using only real supported values or verified dictionary values.
