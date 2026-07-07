@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { constants as fsConstants } from "node:fs";
 import fs from "node:fs/promises";
 import os from "node:os";
@@ -10,15 +11,17 @@ import { fileURLToPath } from "node:url";
 const SKILL_NAME = "hh-vacancy-research";
 const PACKAGE_NAME = "hh-vacancy-research-skill";
 const SOURCE_REPO = "https://github.com/GreatPika/hh-vacancy-research";
-const MARKER_FILE = ".hh-vacancy-research-skill.install.json";
-const VENV_DIR = ".venv";
-const PAYLOAD_ENTRIES = [
+const LEGACY_MARKER_FILE = ".hh-vacancy-research-skill.install.json";
+const SKILL_PAYLOAD_ENTRIES = [
   "SKILL.md",
   "agents",
   "references",
-  "requirements.txt",
   "scripts",
   "templates",
+];
+const PACKAGE_REQUIRED_ENTRIES = [
+  ...SKILL_PAYLOAD_ENTRIES,
+  "requirements.txt",
 ];
 
 const sourceRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -46,8 +49,8 @@ Examples:
   npx hh-vacancy-research-skill doctor
 
 The installer writes to $CODEX_HOME/skills/${SKILL_NAME}, or ~/.codex/skills/${SKILL_NAME}
-when CODEX_HOME is not set. Python dependencies are installed into the skill-local .venv,
-not into system Python.`;
+when CODEX_HOME is not set. Python dependencies are installed into a user cache directory,
+not into the installed skill directory or system Python.`;
 }
 
 function codexHome() {
@@ -60,8 +63,32 @@ function targetDir() {
   return path.join(codexHome(), "skills", SKILL_NAME);
 }
 
-function markerPath(target = targetDir()) {
-  return path.join(target, MARKER_FILE);
+function cacheRoot() {
+  if (process.env.HH_VACANCY_RESEARCH_SKILL_CACHE) {
+    return path.resolve(process.env.HH_VACANCY_RESEARCH_SKILL_CACHE);
+  }
+  if (process.platform === "win32" && process.env.LOCALAPPDATA) {
+    return path.join(process.env.LOCALAPPDATA, PACKAGE_NAME);
+  }
+  if (process.platform === "darwin") {
+    return path.join(os.homedir(), "Library", "Caches", PACKAGE_NAME);
+  }
+  if (process.env.XDG_CACHE_HOME) {
+    return path.join(process.env.XDG_CACHE_HOME, PACKAGE_NAME);
+  }
+  return path.join(os.homedir(), ".cache", PACKAGE_NAME);
+}
+
+function hashPath(value) {
+  return createHash("sha256").update(path.resolve(value)).digest("hex").slice(0, 16);
+}
+
+function installStatePath(target = targetDir()) {
+  return path.join(cacheRoot(), "installs", `${hashPath(target)}.json`);
+}
+
+function legacyMarkerPath(target = targetDir()) {
+  return path.join(target, LEGACY_MARKER_FILE);
 }
 
 async function exists(filePath) {
@@ -120,7 +147,7 @@ function parseArgs(argv) {
 }
 
 async function assertSourcePayload() {
-  for (const entry of PAYLOAD_ENTRIES) {
+  for (const entry of PACKAGE_REQUIRED_ENTRIES) {
     const entryPath = path.join(sourceRoot, entry);
     if (!(await exists(entryPath))) {
       throw new Error(`Package payload is missing ${entryPath}`);
@@ -130,23 +157,59 @@ async function assertSourcePayload() {
 
 async function copyPayload(target) {
   await fs.mkdir(target, { recursive: true });
-  for (const entry of PAYLOAD_ENTRIES) {
+  for (const entry of SKILL_PAYLOAD_ENTRIES) {
     await fs.cp(path.join(sourceRoot, entry), path.join(target, entry), {
       recursive: true,
       force: true,
       errorOnExist: false,
     });
   }
+  await removePythonCache(target);
 }
 
-async function writeMarker(target) {
-  const marker = {
+async function removePythonCache(root) {
+  const entries = await fs.readdir(root, { withFileTypes: true });
+  for (const entry of entries) {
+    const entryPath = path.join(root, entry.name);
+    if (entry.isDirectory() && entry.name === "__pycache__") {
+      await fs.rm(entryPath, { recursive: true, force: true });
+    } else if (entry.isDirectory()) {
+      await removePythonCache(entryPath);
+    }
+  }
+}
+
+async function writeInstallState(target) {
+  const state = {
     packageName: PACKAGE_NAME,
     packageVersion,
     sourceRepo: SOURCE_REPO,
+    targetDir: target,
+    cacheRoot: cacheRoot(),
     installedAt: new Date().toISOString(),
   };
-  await fs.writeFile(markerPath(target), `${JSON.stringify(marker, null, 2)}\n`, "utf8");
+  const statePath = installStatePath(target);
+  await fs.mkdir(path.dirname(statePath), { recursive: true });
+  await fs.writeFile(statePath, `${JSON.stringify(state, null, 2)}\n`, "utf8");
+}
+
+async function hasManagedInstall(target) {
+  return (await exists(installStatePath(target))) || (await exists(legacyMarkerPath(target)));
+}
+
+async function installStatePaths() {
+  const installsDir = path.join(cacheRoot(), "installs");
+  try {
+    const entries = await fs.readdir(installsDir, { withFileTypes: true });
+    return entries
+      .filter((entry) => entry.isFile() && entry.name.endsWith(".json"))
+      .map((entry) => path.join(installsDir, entry.name));
+  } catch (error) {
+    if (error && error.code === "ENOENT") {
+      return [];
+    }
+    throw error;
+  }
 }
 
 function pythonCandidates(options) {
@@ -190,15 +253,15 @@ function formatPythonCommand(python) {
   return [python.command, ...python.prefixArgs].join(" ");
 }
 
-function venvPath(target) {
-  return path.join(target, VENV_DIR);
+function venvPath() {
+  return path.join(cacheRoot(), "venv");
 }
 
-function venvPython(target) {
+function venvPython() {
   return {
     command: process.platform === "win32"
-      ? path.join(venvPath(target), "Scripts", "python.exe")
-      : path.join(venvPath(target), "bin", "python"),
+      ? path.join(venvPath(), "Scripts", "python.exe")
+      : path.join(venvPath(), "bin", "python"),
     prefixArgs: [],
   };
 }
@@ -207,8 +270,8 @@ function formatShellPath(value) {
   return JSON.stringify(value);
 }
 
-async function createVirtualenv(target, basePython) {
-  const destination = venvPath(target);
+async function createVirtualenv(basePython) {
+  const destination = venvPath();
   console.log(`Creating Python virtual environment at ${destination}...`);
   const venv = runPython(basePython, ["-m", "venv", destination]);
   if (venv.status !== 0) {
@@ -219,11 +282,11 @@ async function createVirtualenv(target, basePython) {
   }
 }
 
-async function installPythonDependencies(target, basePython) {
-  await createVirtualenv(target, basePython);
-  const python = venvPython(target);
-  const requirements = path.join(target, "requirements.txt");
-  console.log(`Installing Python dependencies into ${venvPath(target)}...`);
+async function installPythonDependencies(basePython) {
+  await createVirtualenv(basePython);
+  const python = venvPython();
+  const requirements = path.join(sourceRoot, "requirements.txt");
+  console.log(`Installing Python dependencies into ${venvPath()}...`);
   const result = runPython(python, [
     "-m",
     "pip",
@@ -233,7 +296,7 @@ async function installPythonDependencies(target, basePython) {
   ]);
   if (result.status !== 0) {
     throw new Error(
-      "Python dependency installation failed inside the skill virtual environment. " +
+      "Python dependency installation failed inside the external virtual environment. " +
         `Retry with --python <path>, or run: ${formatPythonCommand(python)} -m pip install -r ${formatShellPath(requirements)}`,
     );
   }
@@ -247,12 +310,12 @@ async function pythonForDoctor(target, options) {
     }
     return explicit;
   }
-  const installed = venvPython(target);
+  const installed = venvPython();
   if (await exists(installed.command)) {
     return installed;
   }
   throw new Error(
-    `${venvPath(target)} was not found. Run \`${PACKAGE_NAME} install --force\`, ` +
+    `${venvPath()} was not found. Run \`${PACKAGE_NAME} install --force\`, ` +
       "or pass --python <path> to check another Python environment.",
   );
 }
@@ -261,11 +324,10 @@ async function install(options) {
   await assertSourcePayload();
   const target = targetDir();
   const targetExists = await exists(target);
-  const markerExists = await exists(markerPath(target));
 
-  if (targetExists && !markerExists && !options.force) {
+  if (targetExists && !options.force) {
     throw new Error(
-      `${target} already exists and was not created by ${PACKAGE_NAME}. ` +
+      `${target} already exists. ` +
         "Use --force to replace it.",
     );
   }
@@ -275,7 +337,7 @@ async function install(options) {
   }
 
   await copyPayload(target);
-  await writeMarker(target);
+  await writeInstallState(target);
   console.log(`Installed ${SKILL_NAME} to ${target}`);
 
   if (options.skipPythonDeps) {
@@ -291,7 +353,7 @@ async function install(options) {
         "or rerun with --skip-python-deps.",
     );
   }
-  await installPythonDependencies(target, python);
+  await installPythonDependencies(python);
 }
 
 async function doctor(options) {
@@ -316,7 +378,7 @@ async function doctor(options) {
   if (openpyxl.status !== 0) {
     throw new Error(
       `openpyxl is not available for ${formatPythonCommand(python)}. ` +
-        `Run: ${formatPythonCommand(python)} -m pip install -r ${formatShellPath(path.join(target, "requirements.txt"))}`,
+        `Run: ${formatPythonCommand(python)} -m pip install -r ${formatShellPath(path.join(sourceRoot, "requirements.txt"))}`,
     );
   }
   console.log(`openpyxl: ${openpyxl.stdout.trim()}`);
@@ -386,15 +448,21 @@ async function uninstall(options) {
     return;
   }
 
-  const markerExists = await exists(markerPath(target));
-  if (!markerExists && !options.force) {
+  const managedInstallExists = await hasManagedInstall(target);
+  if (!managedInstallExists && !options.force) {
     throw new Error(
-      `${target} does not contain ${MARKER_FILE}. ` +
+      `${target} is not registered as a ${PACKAGE_NAME} install. ` +
         "Refusing to remove a manual install without --force.",
     );
   }
 
   await fs.rm(target, { recursive: true, force: true });
+  const statePath = installStatePath(target);
+  await fs.rm(statePath, { force: true });
+  const remainingStatePaths = (await installStatePaths()).filter((candidate) => candidate !== statePath);
+  if (remainingStatePaths.length === 0) {
+    await fs.rm(venvPath(), { recursive: true, force: true });
+  }
   console.log(`Removed ${target}`);
 }
 

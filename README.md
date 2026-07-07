@@ -20,30 +20,30 @@ Standard Agent Skills installer:
 npx skills add GreatPika/hh-vacancy-research -a codex
 ```
 
-The standard `skills` installer installs the skill files. The dedicated `hh-vacancy-research-skill` installer also creates a skill-local Python virtual environment and installs the Python dependency required for XLSX export.
+The standard `skills` installer installs the skill files. The dedicated `hh-vacancy-research-skill` installer also creates an external Python virtual environment and installs the Python dependency required for XLSX export.
 
 ## Requirements
 
 - Node.js 18 or newer for the `npx` installer.
 - Python 3 for the scraper and exporter.
 - Internet access for hh.ru collection.
-- `openpyxl` for XLSX export; the dedicated installer installs it automatically into `~/.codex/skills/hh-vacancy-research/.venv`.
+- `openpyxl` for XLSX export; the dedicated installer installs it automatically into a user cache directory.
 
 ## Installer Commands
 
-Install the skill and Python dependencies into a skill-local `.venv`:
+Install the skill and Python dependencies:
 
 ```bash
 npx hh-vacancy-research-skill install
 ```
 
-Install only the skill files, without creating `.venv`:
+Install only the skill files, without creating the Python environment:
 
 ```bash
 npx hh-vacancy-research-skill install --skip-python-deps
 ```
 
-Use a specific Python executable to create the skill-local `.venv`:
+Use a specific Python executable to create the external Python environment:
 
 ```bash
 npx hh-vacancy-research-skill install --python python3.12
@@ -61,9 +61,9 @@ Uninstall a marker-managed install:
 npx hh-vacancy-research-skill uninstall
 ```
 
-The installer writes to `$CODEX_HOME/skills/hh-vacancy-research` when `CODEX_HOME` is set, otherwise to `~/.codex/skills/hh-vacancy-research`.
+The installer writes skill files to `$CODEX_HOME/skills/hh-vacancy-research` when `CODEX_HOME` is set, otherwise to `~/.codex/skills/hh-vacancy-research`.
 
-Python dependencies are not installed into system Python. The installer creates `.venv` inside the installed skill directory, which avoids Homebrew and OS-managed Python restrictions.
+Python dependencies are not installed into system Python and are not stored inside the installed skill directory. The installer creates a virtual environment in the user cache directory, such as `~/Library/Caches/hh-vacancy-research-skill/venv` on macOS. Set `HH_VACANCY_RESEARCH_SKILL_CACHE` to override that location.
 
 ## Usage In Codex
 
