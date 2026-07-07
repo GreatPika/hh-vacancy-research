@@ -68,6 +68,18 @@ class ExportRowsTest(unittest.TestCase):
             ],
         )
 
+    def test_rows_for_deduplicates_search_queries_in_first_seen_order(self) -> None:
+        rows = rows_for([
+            {
+                "title": "ML Engineer",
+                "company": "Example AI",
+                "url": "https://hh.ru/vacancy/1",
+                "search_queries": ["RAG", "LangChain", "RAG"],
+            }
+        ])
+
+        self.assertEqual(rows[1][7], "RAG, LangChain")
+
     def test_markdown_export_uses_russian_column_headers(self) -> None:
         rows = rows_for([])
 

@@ -160,7 +160,7 @@ def matched_terms(vacancy: dict[str, object]) -> str:
 
 
 def search_queries(vacancy: dict[str, object]) -> str:
-    return ", ".join(string_list(vacancy.get("search_queries")))
+    return ", ".join(dict.fromkeys(string_list(vacancy.get("search_queries"))))
 
 
 def structured_matched_terms(vacancy: dict[str, object]) -> list[str]:
