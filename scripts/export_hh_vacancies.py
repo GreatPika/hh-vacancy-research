@@ -151,12 +151,12 @@ def match_fields(vacancy: dict[str, object]) -> str:
 def matched_terms(vacancy: dict[str, object]) -> str:
     terms = vacancy.get("matched_terms")
     if isinstance(terms, list):
-        return ", ".join(str(term) for term in terms)
-    return ", ".join(
+        return ", ".join(dict.fromkeys(str(term) for term in terms))
+    return ", ".join(dict.fromkeys(
         str(match.get("term"))
         for match in dict_list(vacancy.get("matches"))
         if match.get("term")
-    )
+    ))
 
 
 def search_queries(vacancy: dict[str, object]) -> str:

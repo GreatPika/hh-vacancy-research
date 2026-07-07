@@ -80,6 +80,18 @@ class ExportRowsTest(unittest.TestCase):
 
         self.assertEqual(rows[1][7], "RAG, LangChain")
 
+    def test_rows_for_deduplicates_matched_terms_in_first_seen_order(self) -> None:
+        rows = rows_for([
+            {
+                "title": "ML Engineer",
+                "company": "Example AI",
+                "url": "https://hh.ru/vacancy/1",
+                "matched_terms": ["AI", "MCP", "AI"],
+            }
+        ])
+
+        self.assertEqual(rows[1][8], "AI, MCP")
+
     def test_markdown_export_uses_russian_column_headers(self) -> None:
         rows = rows_for([])
 
