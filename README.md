@@ -2,9 +2,9 @@
 
 A Codex skill for guided hh.ru vacancy research.
 
-The skill helps an agent turn a user's research intent into a confirmed search profile, collect full hh.ru vacancy cards, validate matches across vacancy title, employer/company name, description, and key skills, and export results to JSON, Markdown, CSV, and XLSX.
+The skill helps an agent turn a user's research intent into a confirmed search profile, collect full hh.ru vacancy cards, confirm matches in the same text area selected for hh.ru search, and export results to Markdown, CSV, and XLSX.
 
-The workflow is intentionally gated: the agent must ask what to search for, where to match it, which geography and exclusions apply, and must show the draft profile before running any network collection.
+The workflow is intentionally gated: the agent must ask what to search for, where hh.ru should search the query text, which geography and exclusions apply, and must show the draft profile before running any network collection.
 
 ## Quick Install
 
@@ -79,8 +79,16 @@ The agent should guide you through:
 2. Search term research.
 3. Profile confirmation.
 4. hh.ru collection.
-5. Export to JSON, Markdown, CSV, and XLSX.
-6. Final report with checked, kept, skipped, and top matched groups.
+5. Export to Markdown, CSV, and XLSX.
+6. Final response with links to the reusable profile, Markdown, CSV, and XLSX files.
+
+By default, generated files are written under the current Codex working directory:
+
+```text
+outputs/hh-vacancy-research/<research-slug>/
+```
+
+Runtime files must not be written inside the installed skill package.
 
 ## Supported Filters
 
@@ -98,11 +106,12 @@ The skill asks users about filters that can be represented by the bundled scrape
 | Salary | Minimum salary and whether to include only vacancies with visible salary. |
 | Freshness | Vacancies published in the last N days, up to hh.ru's 30-day limit. |
 | Sort order | Relevance, newest first, salary high-to-low, or salary low-to-high. |
-| Match fields | Which full-card fields count as a valid match: title, company name, full description, key skills. |
 | Accepted meanings | Exact words, spellings, Russian/English variants, product names, and regex patterns that should count. |
 | Exclusions | False-positive contexts that suppress a match, such as SQL cursor when searching for Cursor. |
 
-The skill does not apply native hh.ru filters for office/hybrid specifically, employer type, metro, education, language, or professional role. The agent can still encode user-provided constraints as search terms, match patterns, or exclusions when that is practical.
+The local match scope is an internal profile setting derived from the selected hh.ru search field. The normal wizard does not ask users to configure it separately.
+
+The skill does not apply native hh.ru filters for office/hybrid specifically, employer type, metro, education, language, or professional role. The agent can still encode user-provided constraints as search terms, accepted meanings, or exclusions when that is practical.
 
 ## Operational Notes
 

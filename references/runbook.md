@@ -17,12 +17,14 @@ Create a short lowercase `research-slug` from the confirmed research title.
 Use this output directory pattern:
 
 ```text
-<external-output-root>/outputs/hh-vacancy-research/<research-slug>/
+<codex-start-directory>/outputs/hh-vacancy-research/<research-slug>/
 ```
 
-Resolve `<external-output-root>` to an absolute path outside the skill package. If the current working directory is the skill package, use an external location such as the parent directory or the user's home workspace.
+Resolve `<codex-start-directory>` to the current Codex working directory: the project or folder from which the user started this Codex session. By default, generated files must stay with that project.
 
-Keep runtime artifacts outside the skill package:
+The work directory must not be inside the installed skill package, such as `$CODEX_HOME/skills/hh-vacancy-research` or `~/.codex/skills/hh-vacancy-research`. If the current Codex working directory is the installed skill package, stop and ask the user for the project directory where outputs should be written. Do not silently choose another root.
+
+Keep runtime artifacts in the work directory:
 
 - profile drafts;
 - cache directories;
@@ -77,7 +79,7 @@ Use the same confirmed profile, cache directory, output JSON, and checkpoint JSO
 
 If a search key produces repeated noisy pages, stop, tighten the profile, and explain the change.
 
-Checkpoint resume applies only when the profile is unchanged. After changing search terms, accepted terms, exclusions, native filters, or match fields, use a new checkpoint file or rely on checkpoint fingerprinting to ignore old rows.
+Checkpoint resume applies only when the profile is unchanged. After changing search terms, accepted terms, exclusions, native filters, or internal `match_scope`, use a new checkpoint file or rely on checkpoint fingerprinting to ignore old rows.
 
 Resume an interrupted unchanged run by repeating the same full collection command with the same cache directory and checkpoint JSONL.
 

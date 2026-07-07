@@ -17,6 +17,7 @@ from pathlib import Path
 EXCEL_CELL_LIMIT = 32767
 DESCRIPTION_CHUNK_SIZE = 30000
 LARGE_XLSX_ROW_THRESHOLD = 1000
+SKILL_PACKAGE_NAME = "hh-vacancy-research"
 VACANCY_HEADERS = [
     "Название вакансии",
     "Компания",
@@ -416,6 +417,24 @@ def skill_root() -> Path:
     return Path(__file__).resolve().parents[1]
 
 
+def codex_home_candidates() -> tuple[Path, ...]:
+    homes: list[Path] = []
+    env_home = os.environ.get("CODEX_HOME")
+    if env_home:
+        homes.append(Path(env_home))
+    homes.append(Path.home() / ".codex")
+    return tuple(dict.fromkeys(home.resolve() for home in homes))
+
+
+def protected_skill_package_roots() -> tuple[Path, ...]:
+    roots = [home / "skills" / SKILL_PACKAGE_NAME for home in codex_home_candidates()]
+    root = skill_root().resolve()
+    parts = set(root.parts)
+    if ".codex" in parts and ("skills" in parts or "plugins" in parts):
+        roots.append(root)
+    return tuple(dict.fromkeys(path.resolve() for path in roots))
+
+
 def is_relative_to(path: Path, parent: Path) -> bool:
     try:
         path.resolve().relative_to(parent.resolve())
@@ -425,11 +444,11 @@ def is_relative_to(path: Path, parent: Path) -> bool:
 
 
 def validate_work_paths(args: argparse.Namespace, outputs: dict[str, Path]) -> None:
-    root = skill_root()
-    if is_relative_to(args.output_dir, root):
+    roots = protected_skill_package_roots()
+    if any(is_relative_to(args.output_dir, root) for root in roots):
         raise ValueError("--output-dir must not point inside the skill package")
     for label, path in {"output-dir": args.output_dir, **outputs}.items():
-        if is_relative_to(path, root):
+        if any(is_relative_to(path, root) for root in roots):
             raise ValueError(
                 f"{label.upper()} output path would be inside the skill package; "
                 "change --output-dir or --output-prefix"

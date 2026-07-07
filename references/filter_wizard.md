@@ -27,6 +27,8 @@ For each block:
 
 You may group only tightly coupled choices in the same question, such as minimum salary and "only vacancies with salary". If the user explicitly asks to keep all recommended defaults, skip the remaining optional filter questions and proceed to the full summary.
 
+Do not ask the user to configure profile `match_scope`. It is an internal confirmation scope and must be derived from the selected "Где искать на hh.ru" value according to `references/profile_mapping.md`.
+
 ## Unsupported Native Filters
 
 Do not ask the user to configure these as native hh.ru filters:
@@ -151,21 +153,6 @@ When the user chooses an industry, look up real values in `https://api.hh.ru/ind
 - сначала новые;
 - зарплата по убыванию;
 - зарплата по возрастанию.
-
-### Full-Card Match Fields
-
-Объяснение: эти поля определяют, где в полной карточке вакансии совпадение будет считаться подходящим: в названии, компании, описании или навыках.
-
-По умолчанию: название, описание и навыки включены. Компания включается только когда пользователь ищет названия или упоминания компаний.
-
-Варианты:
-
-- название вакансии;
-- работодатель/компания;
-- полный текст вакансии;
-- ключевые навыки.
-
-At least one match field must be enabled.
 
 ## Progress Updates
 

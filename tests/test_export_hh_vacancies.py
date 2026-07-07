@@ -1,8 +1,12 @@
 import unittest
+import argparse
+import os
 from tempfile import TemporaryDirectory
 from pathlib import Path
+from unittest.mock import patch
 
 
+import scripts.export_hh_vacancies as exporter
 from scripts.export_hh_vacancies import rows_for, write_markdown
 
 
@@ -72,6 +76,65 @@ class ExportRowsTest(unittest.TestCase):
                 "| Название вакансии | Компания | Заработная плата | Опыт | График | Отрасль работодателя | Ссылка | Поисковые группы | Поля совпадения | Навыки | Описание |",
                 path.read_text(encoding="utf-8"),
             )
+
+    def test_validate_work_paths_allows_current_project_outputs(self) -> None:
+        output_dir = Path.cwd() / "outputs" / "hh-vacancy-research" / "sample"
+        args = argparse.Namespace(output_dir=output_dir)
+        outputs = {
+            "json": output_dir / "sample.vacancies.json",
+            "md": output_dir / "sample.vacancies.md",
+            "csv": output_dir / "sample.vacancies.csv",
+            "xlsx": output_dir / "sample.vacancies.xlsx",
+        }
+
+        exporter.validate_work_paths(args, outputs)
+
+    def test_validate_work_paths_rejects_installed_skill_outputs(self) -> None:
+        with TemporaryDirectory() as codex_home:
+            output_dir = Path(codex_home) / "skills" / "hh-vacancy-research" / "outputs" / "sample"
+            args = argparse.Namespace(output_dir=output_dir)
+            outputs = {
+                "json": output_dir / "sample.vacancies.json",
+                "md": output_dir / "sample.vacancies.md",
+                "csv": output_dir / "sample.vacancies.csv",
+                "xlsx": output_dir / "sample.vacancies.xlsx",
+            }
+
+            with patch.dict(os.environ, {"CODEX_HOME": codex_home}):
+                with self.assertRaisesRegex(ValueError, "skill package"):
+                    exporter.validate_work_paths(args, outputs)
+
+    def test_validate_work_paths_rejects_default_codex_home_outputs(self) -> None:
+        with TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            output_dir = home / ".codex" / "skills" / "hh-vacancy-research" / "outputs" / "sample"
+            args = argparse.Namespace(output_dir=output_dir)
+            outputs = {
+                "json": output_dir / "sample.vacancies.json",
+                "md": output_dir / "sample.vacancies.md",
+                "csv": output_dir / "sample.vacancies.csv",
+                "xlsx": output_dir / "sample.vacancies.xlsx",
+            }
+
+            with patch.object(exporter.Path, "home", return_value=home):
+                with self.assertRaisesRegex(ValueError, "skill package"):
+                    exporter.validate_work_paths(args, outputs)
+
+    def test_validate_work_paths_rejects_current_installed_skill_root_outputs(self) -> None:
+        with TemporaryDirectory() as tmp:
+            skill_root = Path(tmp) / ".codex" / "plugins" / "cache" / "hh-vacancy-research"
+            output_dir = skill_root / "outputs" / "sample"
+            args = argparse.Namespace(output_dir=output_dir)
+            outputs = {
+                "json": output_dir / "sample.vacancies.json",
+                "md": output_dir / "sample.vacancies.md",
+                "csv": output_dir / "sample.vacancies.csv",
+                "xlsx": output_dir / "sample.vacancies.xlsx",
+            }
+
+            with patch.object(exporter, "skill_root", return_value=skill_root):
+                with self.assertRaisesRegex(ValueError, "skill package"):
+                    exporter.validate_work_paths(args, outputs)
 
 
 if __name__ == "__main__":

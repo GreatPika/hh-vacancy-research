@@ -32,6 +32,7 @@ from urllib.request import HTTPSHandler, HTTPCookieProcessor, Request, build_ope
 
 
 BASE_URL = "https://hh.ru"
+SKILL_PACKAGE_NAME = "hh-vacancy-research"
 USER_AGENT = (
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
     "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125 Safari/537.36"
@@ -1559,6 +1560,24 @@ def skill_root() -> Path:
     return Path(__file__).resolve().parents[1]
 
 
+def codex_home_candidates() -> tuple[Path, ...]:
+    homes: list[Path] = []
+    env_home = os.environ.get("CODEX_HOME")
+    if env_home:
+        homes.append(Path(env_home))
+    homes.append(Path.home() / ".codex")
+    return tuple(dict.fromkeys(home.resolve() for home in homes))
+
+
+def protected_skill_package_roots() -> tuple[Path, ...]:
+    roots = [home / "skills" / SKILL_PACKAGE_NAME for home in codex_home_candidates()]
+    root = skill_root().resolve()
+    parts = set(root.parts)
+    if ".codex" in parts and ("skills" in parts or "plugins" in parts):
+        roots.append(root)
+    return tuple(dict.fromkeys(path.resolve() for path in roots))
+
+
 def is_relative_to(path: Path, parent: Path) -> bool:
     try:
         path.resolve().relative_to(parent.resolve())
@@ -1568,13 +1587,14 @@ def is_relative_to(path: Path, parent: Path) -> bool:
 
 
 def validate_work_paths(args: argparse.Namespace) -> None:
-    root = skill_root()
+    roots = protected_skill_package_roots()
     for label, path in {
+        "profile": args.profile,
         "cache-dir": args.cache_dir,
         "output-json": args.output_json,
         "checkpoint-jsonl": args.checkpoint_jsonl,
     }.items():
-        if is_relative_to(path, root):
+        if any(is_relative_to(path, root) for root in roots):
             raise ValueError(f"--{label} must not point inside the skill package")
 
 
@@ -1594,6 +1614,7 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> int:
     args = parse_args()
+    validate_work_paths(args)
     profile = load_profile(args.profile)
     if args.validate_profile:
         print(f"profile ok: {profile.title}")
@@ -1601,7 +1622,6 @@ def main() -> int:
         print(f"search groups: {len(profile.search_terms)}")
         return 0
 
-    validate_work_paths(args)
     args.cache_dir.mkdir(parents=True, exist_ok=True)
     search_ids = collect_search_ids(args, profile)
     vacancy_ids = unique(vacancy_id for ids in search_ids.values() for vacancy_id in ids)

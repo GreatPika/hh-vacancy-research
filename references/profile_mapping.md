@@ -19,8 +19,7 @@ Before creating the profile, show the user a complete Russian summary with these
 - регион;
 - все фильтры hh.ru;
 - где hh.ru ищет слова;
-- где полная карточка проверяется на совпадение;
-- рабочая папка вне пакета skill, по правилу ниже;
+- рабочая папка в текущем проекте, по правилу ниже;
 - какие файлы будут созданы.
 
 Create a short lowercase `research-slug` from the confirmed research title before showing the summary.
@@ -28,23 +27,22 @@ Create a short lowercase `research-slug` from the confirmed research title befor
 Use this work directory pattern:
 
 ```text
-<external-output-root>/outputs/hh-vacancy-research/<research-slug>/
+<codex-start-directory>/outputs/hh-vacancy-research/<research-slug>/
 ```
 
-The resolved absolute path must be outside the skill package because the scraper and exporter reject runtime paths inside the skill package. If the current working directory is the skill package, choose an external output root such as its parent directory or the user's home workspace, then show the absolute work directory in the summary.
+Resolve `<codex-start-directory>` to the current Codex working directory: the project or folder from which the user started this Codex session. By default, runtime artifacts belong to the user's current project, not to the skill installation directory or the user's home directory.
+
+The resolved absolute work directory must not be inside the installed skill package, such as `$CODEX_HOME/skills/hh-vacancy-research` or `~/.codex/skills/hh-vacancy-research`. If the current Codex working directory is the installed skill package, stop and ask the user for the project directory where outputs should be written. Do not silently choose another root.
 
 Explain files by purpose using this Russian copy:
 
 ```text
 В конце я создам несколько файлов:
 
-- Профиль поиска — здесь сохранены выбранные вами настройки. Он нужен, чтобы потом повторить или поправить этот же поиск.
-- Исходные результаты — это полный результат сбора до удобной выгрузки. Нужен для проверки и повторного экспорта.
-- Экспорт JSON — те же найденные вакансии в удобной структуре для других программ или повторной обработки.
-- Таблица XLSX — основной файл для просмотра в Excel или Google Sheets.
-- CSV — упрощённая таблица для импорта в другие инструменты.
+- Профиль поиска — сохранённые настройки поиска, которые можно переиспользовать для повторного запуска или корректировки запроса.
 - Markdown — удобная текстовая версия для быстрого просмотра.
-- Файл продолжения — технический файл. Он нужен, чтобы не начинать заново, если сбор прервётся.
+- CSV — упрощённая таблица для импорта в другие инструменты.
+- XLSX — основная таблица для просмотра в Excel или Google Sheets.
 ```
 
 Wait for explicit user confirmation before creating the profile.
@@ -82,10 +80,39 @@ Wait for explicit user confirmation before creating the profile.
 - `hh.filters.only_with_salary`: `false`.
 - `hh.filters.order_by`: `"relevance"`.
 - `hh.filters.period`: `null`.
-- `match_scope.title`: `true`.
-- `match_scope.company`: `false` unless searching for company names or mentions.
-- `match_scope.description`: `true`.
-- `match_scope.skills`: `true`.
+
+## Match Scope Mapping
+
+Do not ask the user to choose `match_scope` in the normal wizard flow.
+
+Build `match_scope` mechanically from `hh.filters.search_field`. This keeps the local confirmation step aligned with the hh.ru text search area the user already selected.
+
+Set all supported `match_scope` keys explicitly in the generated profile:
+
+- `title`
+- `company`
+- `description`
+- `skills`
+
+Use this exact mapping for the normal wizard choices:
+
+| `hh.filters.search_field` | Meaning | Generated `match_scope` |
+| --- | --- | --- |
+| `[]` | hh.ru searches everywhere | `{"title": true, "company": false, "description": true, "skills": true}` |
+| `["name"]` | hh.ru searches only vacancy titles | `{"title": true, "company": false, "description": false, "skills": false}` |
+| `["company_name"]` | hh.ru searches only employer names | `{"title": false, "company": true, "description": false, "skills": false}` |
+| `["description"]` | hh.ru searches only vacancy descriptions | `{"title": false, "company": false, "description": true, "skills": false}` |
+
+For any non-empty `hh.filters.search_field` array, generate `match_scope` with this deterministic rule:
+
+- `title` is `true` only when `"name"` is present.
+- `company` is `true` only when `"company_name"` is present.
+- `description` is `true` only when `"description"` is present.
+- `skills` is always `false`.
+
+For example, `["name", "description"]` must generate `{"title": true, "company": false, "description": true, "skills": false}`.
+
+Only override this mapping when the user explicitly asks for a different confirmation scope. If overriding, record the reason in `notes`.
 
 ## Native Filter Values
 

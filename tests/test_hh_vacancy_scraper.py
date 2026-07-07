@@ -1,5 +1,6 @@
 import unittest
 import argparse
+import os
 import tempfile
 from pathlib import Path
 from unittest.mock import patch
@@ -535,6 +536,112 @@ class VacancyParsingTest(unittest.TestCase):
         self.assertEqual(record["experience"], "3–6 лет")
         self.assertEqual(record["schedule"], "удалённо")
         self.assertEqual(record["employer_industry"], "")
+
+    def test_validate_work_paths_allows_current_project_outputs(self) -> None:
+        project_outputs = Path.cwd() / "outputs" / "hh-vacancy-research" / "sample"
+        args = argparse.Namespace(
+            profile=project_outputs / "sample.profile.json",
+            cache_dir=project_outputs / "cache",
+            output_json=project_outputs / "sample.source.json",
+            checkpoint_jsonl=project_outputs / "sample.checkpoint.jsonl",
+        )
+
+        scraper.validate_work_paths(args)
+
+    def test_validate_work_paths_rejects_installed_skill_outputs(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            codex_home = Path(tmp)
+            skill_output = codex_home / "skills" / "hh-vacancy-research" / "outputs" / "sample"
+            args = argparse.Namespace(
+                profile=skill_output / "sample.profile.json",
+                cache_dir=skill_output / "cache",
+                output_json=skill_output / "sample.source.json",
+                checkpoint_jsonl=skill_output / "sample.checkpoint.jsonl",
+            )
+
+            with patch.dict(os.environ, {"CODEX_HOME": str(codex_home)}):
+                with self.assertRaisesRegex(ValueError, "skill package"):
+                    scraper.validate_work_paths(args)
+
+    def test_validate_work_paths_rejects_default_codex_home_outputs(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            skill_output = home / ".codex" / "skills" / "hh-vacancy-research" / "outputs" / "sample"
+            args = argparse.Namespace(
+                profile=skill_output / "sample.profile.json",
+                cache_dir=skill_output / "cache",
+                output_json=skill_output / "sample.source.json",
+                checkpoint_jsonl=skill_output / "sample.checkpoint.jsonl",
+            )
+
+            with patch.object(scraper.Path, "home", return_value=home):
+                with self.assertRaisesRegex(ValueError, "skill package"):
+                    scraper.validate_work_paths(args)
+
+    def test_validate_work_paths_rejects_current_installed_skill_root_outputs(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            skill_root = Path(tmp) / ".codex" / "plugins" / "cache" / "hh-vacancy-research"
+            skill_output = skill_root / "outputs" / "sample"
+            args = argparse.Namespace(
+                profile=skill_output / "sample.profile.json",
+                cache_dir=skill_output / "cache",
+                output_json=skill_output / "sample.source.json",
+                checkpoint_jsonl=skill_output / "sample.checkpoint.jsonl",
+            )
+
+            with patch.object(scraper, "skill_root", return_value=skill_root):
+                with self.assertRaisesRegex(ValueError, "skill package"):
+                    scraper.validate_work_paths(args)
+
+    def test_validate_work_paths_rejects_installed_skill_profile(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            codex_home = Path(tmp)
+            project_outputs = Path.cwd() / "outputs" / "hh-vacancy-research" / "sample"
+            protected_profile = (
+                codex_home
+                / "skills"
+                / "hh-vacancy-research"
+                / "outputs"
+                / "sample"
+                / "sample.profile.json"
+            )
+            args = argparse.Namespace(
+                profile=protected_profile,
+                cache_dir=project_outputs / "cache",
+                output_json=project_outputs / "sample.source.json",
+                checkpoint_jsonl=project_outputs / "sample.checkpoint.jsonl",
+            )
+
+            with patch.dict(os.environ, {"CODEX_HOME": str(codex_home)}):
+                with self.assertRaisesRegex(ValueError, "skill package"):
+                    scraper.validate_work_paths(args)
+
+    def test_main_validate_profile_rejects_installed_skill_profile_before_loading(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            codex_home = Path(tmp)
+            project_outputs = Path.cwd() / "outputs" / "hh-vacancy-research" / "sample"
+            args = argparse.Namespace(
+                profile=(
+                    codex_home
+                    / "skills"
+                    / "hh-vacancy-research"
+                    / "outputs"
+                    / "sample"
+                    / "sample.profile.json"
+                ),
+                cache_dir=project_outputs / "cache",
+                output_json=project_outputs / "sample.source.json",
+                checkpoint_jsonl=project_outputs / "sample.checkpoint.jsonl",
+                validate_profile=True,
+            )
+
+            with patch.dict(os.environ, {"CODEX_HOME": str(codex_home)}):
+                with patch.object(scraper, "parse_args", return_value=args):
+                    with patch.object(scraper, "load_profile") as load_profile:
+                        with self.assertRaisesRegex(ValueError, "skill package"):
+                            scraper.main()
+
+            load_profile.assert_not_called()
 
 
 if __name__ == "__main__":

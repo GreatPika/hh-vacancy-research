@@ -31,10 +31,10 @@ Read the referenced file before each stage:
    Walk through supported filters with real hh.ru values, explanations, defaults, and progress updates.
 
 4. Full summary and confirmation.
-   Show the goal, topics, terms, exclusions, filters, match fields, work directory, and human file explanations. Wait for explicit confirmation.
+   Show the goal, topics, terms, exclusions, filters, work directory, and human file explanations. Wait for explicit confirmation.
 
 5. Profile creation and validation.
-   Create a fresh profile from `templates/search_profile.template.json` outside the skill package. Validate before collection.
+   Create a fresh profile from `templates/search_profile.template.json` in the confirmed work directory. Validate before collection.
 
 6. Preflight and collection.
    Run the bundled scraper only. Start with `--limit-vacancies 2`; continue only when preflight is relevant and unblocked.
@@ -50,6 +50,6 @@ Read the referenced file before each stage:
 - Use only `scripts/hh_vacancy_scraper.py` for collection and `scripts/export_hh_vacancies.py` for export.
 - Do not use hh vacancy APIs, ad hoc scraping, shell one-liners, unrelated scripts, or manually assembled vacancy lists unless the user explicitly abandons this workflow.
 - The official hh API may be used only for dictionary lookups: `https://api.hh.ru/areas` and `https://api.hh.ru/industries`.
-- Keep runtime artifacts outside the skill package.
+- Keep runtime artifacts under the current Codex working directory by default, in `outputs/hh-vacancy-research/<research-slug>/`. Never write runtime artifacts inside the installed skill package.
 - Keep internal settings internal unless the user explicitly asks to control them.
 - Communicate with the user in Russian by default unless the user asks for another language.
