@@ -8,6 +8,8 @@ import test from "node:test";
 
 const repoRoot = path.resolve(import.meta.dirname, "..");
 const cliPath = path.join(repoRoot, "bin", "hh-vacancy-research-skill.mjs");
+const packageJson = JSON.parse(await fs.readFile(path.join(repoRoot, "package.json"), "utf8"));
+const packageVersion = packageJson.version;
 
 async function makeTempDir(prefix) {
   return fs.mkdtemp(path.join(os.tmpdir(), prefix));
@@ -108,6 +110,8 @@ test("install copies only skill files into the Codex skill directory", async () 
   });
 
   assert.equal(result.status, 0, result.stderr || result.stdout);
+  assert.match(result.stdout, new RegExp(`Installing hh-vacancy-research-skill ${packageVersion}`));
+  assert.match(result.stdout, new RegExp(`Installed hh-vacancy-research ${packageVersion} to `));
 
   const skillDir = path.join(codexHome, "skills", "hh-vacancy-research");
   assert.equal(await pathExists(path.join(skillDir, "SKILL.md")), true);
@@ -115,6 +119,61 @@ test("install copies only skill files into the Codex skill directory", async () 
   assert.equal(await pathExists(path.join(skillDir, ".venv")), false);
   assert.equal(await pathExists(path.join(skillDir, ".hh-vacancy-research-skill.install.json")), false);
   assert.equal(await pathExists(path.join(skillDir, "scripts", "__pycache__")), false);
+});
+
+test("update replaces a managed install and reports old and new versions", async () => {
+  const codexHome = await makeTempDir("hh-skill-codex-");
+  const cacheHome = await makeTempDir("hh-skill-cache-");
+  const env = {
+    CODEX_HOME: codexHome,
+    HH_VACANCY_RESEARCH_SKILL_CACHE: cacheHome,
+  };
+
+  const install = runCli(["install", "--skip-python-deps"], env);
+  assert.equal(install.status, 0, install.stderr || install.stdout);
+
+  const skillDir = path.join(codexHome, "skills", "hh-vacancy-research");
+  await fs.writeFile(path.join(skillDir, "stale.txt"), "old install\n", "utf8");
+  await writeStaleInstallState(cacheHome, skillDir);
+
+  const update = runCli(["update", "--skip-python-deps"], env);
+  assert.equal(update.status, 0, update.stderr || update.stdout);
+
+  assert.match(update.stdout, new RegExp(`Updating hh-vacancy-research from 0\\.0\\.0 to ${packageVersion}`));
+  assert.match(update.stdout, new RegExp(`Installed hh-vacancy-research ${packageVersion} to `));
+  assert.equal(await pathExists(path.join(skillDir, "SKILL.md")), true);
+  assert.equal(await pathExists(path.join(skillDir, "stale.txt")), false);
+});
+
+test("update refuses when the skill is not installed", async () => {
+  const codexHome = await makeTempDir("hh-skill-codex-");
+  const cacheHome = await makeTempDir("hh-skill-cache-");
+
+  const result = runCli(["update", "--skip-python-deps"], {
+    CODEX_HOME: codexHome,
+    HH_VACANCY_RESEARCH_SKILL_CACHE: cacheHome,
+  });
+
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /hh-vacancy-research is not installed/);
+  assert.match(result.stderr, /Run `hh-vacancy-research-skill install`/);
+});
+
+test("update refuses to replace an unmanaged skill directory without force", async () => {
+  const codexHome = await makeTempDir("hh-skill-codex-");
+  const cacheHome = await makeTempDir("hh-skill-cache-");
+  const skillDir = path.join(codexHome, "skills", "hh-vacancy-research");
+  await fs.mkdir(skillDir, { recursive: true });
+  await fs.writeFile(path.join(skillDir, "SKILL.md"), "manual skill\n", "utf8");
+
+  const result = runCli(["update", "--skip-python-deps"], {
+    CODEX_HOME: codexHome,
+    HH_VACANCY_RESEARCH_SKILL_CACHE: cacheHome,
+  });
+
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /not registered as a hh-vacancy-research-skill install/);
+  assert.equal(await fs.readFile(path.join(skillDir, "SKILL.md"), "utf8"), "manual skill\n");
 });
 
 test("install creates Python virtualenv outside the Codex skill directory", async () => {

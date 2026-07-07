@@ -49,6 +49,14 @@ Use a specific Python executable to create the external Python environment:
 npx hh-vacancy-research-skill install --python python3.12
 ```
 
+Update an existing installer-managed skill:
+
+```bash
+npx hh-vacancy-research-skill update
+```
+
+The update command prints the installed version and the package version it is applying. It refuses to replace a manual skill directory unless `--force` is passed.
+
 Check the installed skill:
 
 ```bash

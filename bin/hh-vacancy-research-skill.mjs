@@ -37,6 +37,7 @@ Install and manage the hh-vacancy-research Codex skill.
 
 Usage:
   hh-vacancy-research-skill install [--force] [--skip-python-deps] [--python <path>]
+  hh-vacancy-research-skill update [--force] [--skip-python-deps] [--python <path>]
   hh-vacancy-research-skill doctor [--python <path>]
   hh-vacancy-research-skill uninstall [--force]
   hh-vacancy-research-skill --help
@@ -44,6 +45,7 @@ Usage:
 
 Examples:
   npx hh-vacancy-research-skill install
+  npx hh-vacancy-research-skill update
   npx hh-vacancy-research-skill install --skip-python-deps
   npx hh-vacancy-research-skill install --python python3.12
   npx hh-vacancy-research-skill doctor
@@ -193,6 +195,18 @@ async function writeInstallState(target) {
   await fs.writeFile(statePath, `${JSON.stringify(state, null, 2)}\n`, "utf8");
 }
 
+async function readInstallState(target) {
+  try {
+    const state = JSON.parse(await fs.readFile(installStatePath(target), "utf8"));
+    return state && typeof state === "object" ? state : {};
+  } catch (error) {
+    if (error && (error.code === "ENOENT" || error instanceof SyntaxError)) {
+      return {};
+    }
+    throw error;
+  }
+}
+
 async function hasManagedInstall(target) {
   return (await exists(installStatePath(target))) || (await exists(legacyMarkerPath(target)));
 }
@@ -336,9 +350,10 @@ async function install(options) {
     await fs.rm(target, { recursive: true, force: true });
   }
 
+  console.log(`Installing ${PACKAGE_NAME} ${packageVersion}...`);
   await copyPayload(target);
   await writeInstallState(target);
-  console.log(`Installed ${SKILL_NAME} to ${target}`);
+  console.log(`Installed ${SKILL_NAME} ${packageVersion} to ${target}`);
 
   if (options.skipPythonDeps) {
     console.log("Skipped Python dependency installation.");
@@ -350,6 +365,49 @@ async function install(options) {
     throw new Error(
       "Python 3 was not found. The skill files were installed, but Python dependencies were not. " +
         "Install Python 3 and run `hh-vacancy-research-skill install --force`, " +
+        "or rerun with --skip-python-deps.",
+    );
+  }
+  await installPythonDependencies(python);
+}
+
+async function update(options) {
+  await assertSourcePayload();
+  const target = targetDir();
+  const targetExists = await exists(target);
+  if (!targetExists) {
+    throw new Error(`${SKILL_NAME} is not installed. Run \`${PACKAGE_NAME} install\`.`);
+  }
+
+  const managedInstallExists = await hasManagedInstall(target);
+  if (!managedInstallExists && !options.force) {
+    throw new Error(
+      `${target} is not registered as a ${PACKAGE_NAME} install. ` +
+        "Refusing to update a manual install without --force.",
+    );
+  }
+
+  const previousState = await readInstallState(target);
+  const previousVersion = typeof previousState.packageVersion === "string"
+    ? previousState.packageVersion
+    : "unknown";
+  console.log(`Updating ${SKILL_NAME} from ${previousVersion} to ${packageVersion}...`);
+
+  await fs.rm(target, { recursive: true, force: true });
+  await copyPayload(target);
+  await writeInstallState(target);
+  console.log(`Installed ${SKILL_NAME} ${packageVersion} to ${target}`);
+
+  if (options.skipPythonDeps) {
+    console.log("Skipped Python dependency installation.");
+    return;
+  }
+
+  const python = detectPython(options);
+  if (!python) {
+    throw new Error(
+      "Python 3 was not found. The skill files were updated, but Python dependencies were not. " +
+        "Install Python 3 and run `hh-vacancy-research-skill update`, " +
         "or rerun with --skip-python-deps.",
     );
   }
@@ -479,6 +537,10 @@ async function main() {
   }
   if (command === "install") {
     await install(options);
+    return;
+  }
+  if (command === "update") {
+    await update(options);
     return;
   }
   if (command === "doctor") {
