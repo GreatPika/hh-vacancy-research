@@ -73,7 +73,7 @@ Wait for explicit user confirmation before creating the profile.
 - `hh.vacancy_delay_max`: `5.0`.
 - `hh.filters.search_field`: `[]`.
 - `hh.filters.experience`: `[]`.
-- `hh.filters.schedule`: `[]`.
+- `hh.filters.work_format`: `[]`.
 - `hh.filters.employment`: `[]`.
 - `hh.filters.industry`: `[]`.
 - `hh.filters.salary`: `null`.
@@ -126,11 +126,11 @@ Only override this mapping when the user explicitly asks for a different confirm
 | От 1 года до 3 лет | `hh.filters.experience: ["between1And3"]` |
 | От 3 до 6 лет | `hh.filters.experience: ["between3And6"]` |
 | Более 6 лет | `hh.filters.experience: ["moreThan6"]` |
-| Удаленная работа | `hh.filters.schedule: ["remote"]` |
-| Полный день | `hh.filters.schedule: ["fullDay"]` |
-| Сменный график | `hh.filters.schedule: ["shift"]` |
-| Гибкий график | `hh.filters.schedule: ["flexible"]` |
-| Вахтовый метод | `hh.filters.schedule: ["flyInFlyOut"]` |
+| На месте работодателя | `hh.filters.work_format: ["ON_SITE"]` |
+| Удалённо | `hh.filters.work_format: ["REMOTE"]` |
+| Гибрид | `hh.filters.work_format: ["HYBRID"]` |
+| Удалённо и гибрид | `hh.filters.work_format: ["REMOTE", "HYBRID"]` |
+| Разъездной формат | `hh.filters.work_format: ["FIELD_WORK"]` |
 | Полная занятость | `hh.filters.employment: ["full"]` |
 | Частичная занятость | `hh.filters.employment: ["part"]` |
 | Проектная работа | `hh.filters.employment: ["project"]` |

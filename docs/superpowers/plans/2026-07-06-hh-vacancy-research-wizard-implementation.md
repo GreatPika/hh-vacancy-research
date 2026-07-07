@@ -394,19 +394,18 @@ For a specific city, country, or region, look up the id in `https://api.hh.ru/ar
 - более 6 лет;
 - без фильтра.
 
-### Schedule
+### Work Format
 
-Объяснение: этот фильтр ограничивает вакансии по графику работы на hh.ru. Если график не важен, лучше оставить без фильтра, чтобы не потерять подходящие вакансии.
+Объяснение: этот фильтр ограничивает формат работы на hh.ru: на месте работодателя, удалённо, гибрид или разъездной формат. Если формат работы не важен, лучше оставить без фильтра.
 
 По умолчанию: без фильтра.
 
 Варианты:
 
-- удаленная работа;
-- полный день;
-- сменный график;
-- гибкий график;
-- вахтовый метод;
+- на месте работодателя;
+- удалённо;
+- гибрид;
+- разъездной;
 - без фильтра.
 
 ### Employment
@@ -494,9 +493,9 @@ Use this style:
 Регион: Россия
 Где искать на hh.ru: везде
 Опыт: без фильтра
-График: без фильтра
+Формат работы: без фильтра
 
-Следующий шаг: график работы.
+Следующий шаг: формат работы.
 Оставляем без фильтра или ограничиваем?
 ```
 
@@ -509,13 +508,13 @@ Run:
 
 ```bash
 rg -n 'офис/гибрид|профессиональная роль|сортировка по расстоянию' references/filter_wizard.md
-rg -n 'нет опыта|удаленная работа|вахтовый метод|стажировка' references/filter_wizard.md
+rg -n 'нет опыта|удалённо|гибрид|разъездной|стажировка' references/filter_wizard.md
 rg -n 'https://api\.hh\.ru/areas|https://api\.hh\.ru/industries' references/filter_wizard.md
 rg -n 'Настройки поиска сейчас' references/filter_wizard.md
 rg -n 'Объяснение: этот фильтр определяет, в каком регионе' references/filter_wizard.md
 rg -n 'Объяснение: этот фильтр определяет, где hh\.ru будет искать' references/filter_wizard.md
 rg -n 'Объяснение: этот фильтр ограничивает вакансии по опыту' references/filter_wizard.md
-rg -n 'Объяснение: этот фильтр ограничивает вакансии по графику' references/filter_wizard.md
+rg -n 'Объяснение: этот фильтр ограничивает формат работы' references/filter_wizard.md
 rg -n 'Объяснение: этот фильтр ограничивает вакансии по типу занятости' references/filter_wizard.md
 rg -n 'Объяснение: этот фильтр ограничивает отрасль работодателя' references/filter_wizard.md
 rg -n 'Объяснение: этот фильтр ограничивает вакансии по зарплате' references/filter_wizard.md
@@ -610,7 +609,7 @@ Wait for explicit user confirmation before creating the profile.
 - `hh.vacancy_delay_max`: `5.0`.
 - `hh.filters.search_field`: `[]`.
 - `hh.filters.experience`: `[]`.
-- `hh.filters.schedule`: `[]`.
+- `hh.filters.work_format`: `[]`.
 - `hh.filters.employment`: `[]`.
 - `hh.filters.industry`: `[]`.
 - `hh.filters.salary`: `null`.
@@ -634,11 +633,11 @@ Wait for explicit user confirmation before creating the profile.
 | От 1 года до 3 лет | `hh.filters.experience: ["between1And3"]` |
 | От 3 до 6 лет | `hh.filters.experience: ["between3And6"]` |
 | Более 6 лет | `hh.filters.experience: ["moreThan6"]` |
-| Удаленная работа | `hh.filters.schedule: ["remote"]` |
-| Полный день | `hh.filters.schedule: ["fullDay"]` |
-| Сменный график | `hh.filters.schedule: ["shift"]` |
-| Гибкий график | `hh.filters.schedule: ["flexible"]` |
-| Вахтовый метод | `hh.filters.schedule: ["flyInFlyOut"]` |
+| На месте работодателя | `hh.filters.work_format: ["ON_SITE"]` |
+| Удалённо | `hh.filters.work_format: ["REMOTE"]` |
+| Гибрид | `hh.filters.work_format: ["HYBRID"]` |
+| Удалённо и гибрид | `hh.filters.work_format: ["REMOTE", "HYBRID"]` |
+| Разъездной формат | `hh.filters.work_format: ["FIELD_WORK"]` |
 | Полная занятость | `hh.filters.employment: ["full"]` |
 | Частичная занятость | `hh.filters.employment: ["part"]` |
 | Проектная работа | `hh.filters.employment: ["project"]` |
@@ -691,14 +690,14 @@ filters = schema["properties"]["hh"]["properties"]["filters"]["properties"]
 expected_sets = {
     "search_field": set(filters["search_field"]["items"]["enum"]),
     "experience": set(filters["experience"]["items"]["enum"]),
-    "schedule": set(filters["schedule"]["items"]["enum"]),
+    "work_format": set(filters["work_format"]["items"]["enum"]),
     "employment": set(filters["employment"]["items"]["enum"]),
     "order_by": set(filters["order_by"]["enum"]),
 }
 scraper_sets = {
     "search_field": set(scraper.SEARCH_FIELD_VALUES),
     "experience": set(scraper.EXPERIENCE_VALUES),
-    "schedule": set(scraper.SCHEDULE_VALUES),
+    "work_format": set(scraper.WORK_FORMAT_VALUES),
     "employment": set(scraper.EMPLOYMENT_VALUES),
     "order_by": set(scraper.ORDER_BY_VALUES),
 }
@@ -755,7 +754,7 @@ profile = {
         "filters": {
             "search_field": ["name", "company_name", "description"],
             "experience": ["noExperience", "between1And3", "between3And6", "moreThan6"],
-            "schedule": ["remote", "fullDay", "shift", "flexible", "flyInFlyOut"],
+            "work_format": ["ON_SITE", "REMOTE", "HYBRID", "FIELD_WORK"],
             "employment": ["full", "part", "project", "volunteer", "probation"],
             "industry": ["7", "7.540"],
             "salary": 100000,
@@ -1127,7 +1126,7 @@ Expected: `SKILL.md` is under 350 words, reference word counts are printed for r
 Run:
 
 ```bash
-! rg -n 'saved settings|full collected data|main table|simplified table|readable text|continuation file|vacancy title from|employer/company parsed|confirmed search topic|fields where the match|key skills parsed|full vacancy description|no experience|full-time|part-time|project work|shift work|flexible schedule|fly-in/fly-out|salary high-to-low|salary low-to-high' references/*.md
+! rg -n 'saved settings|full collected data|main table|simplified table|readable text|continuation file|vacancy title from|employer/company parsed|confirmed search topic|fields where the match|key skills parsed|full vacancy description|no experience|full-time|part-time|project work|shift work|salary high-to-low|salary low-to-high' references/*.md
 ```
 
 Expected: the command exits with status 0. English may still appear for internal profile values, file formats, URLs, commands, and literal tool/product names.

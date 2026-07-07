@@ -41,13 +41,13 @@ ENABLED_FIELDS = ("title", "company", "description", "skills")
 REQUIRED_MATCH_FIELDS = ("title", "description", "skills")
 SEARCH_FIELD_VALUES = {"name", "company_name", "description"}
 EXPERIENCE_VALUES = {"noExperience", "between1And3", "between3And6", "moreThan6"}
-SCHEDULE_VALUES = {"remote", "fullDay", "shift", "flexible", "flyInFlyOut"}
+WORK_FORMAT_VALUES = {"ON_SITE", "REMOTE", "HYBRID", "FIELD_WORK"}
 EMPLOYMENT_VALUES = {"full", "part", "project", "volunteer", "probation"}
 ORDER_BY_VALUES = {"publication_time", "salary_desc", "salary_asc", "relevance"}
 HH_FILTER_FIELDS = {
     "search_field",
     "experience",
-    "schedule",
+    "work_format",
     "employment",
     "industry",
     "salary",
@@ -132,7 +132,7 @@ def blocked_page_reason(page_html: str) -> str:
 class HhFilters:
     search_field: tuple[str, ...] = ()
     experience: tuple[str, ...] = ()
-    schedule: tuple[str, ...] = ()
+    work_format: tuple[str, ...] = ()
     employment: tuple[str, ...] = ()
     industry: tuple[str, ...] = ()
     salary: int | None = None
@@ -179,7 +179,7 @@ class Vacancy:
     employer_id: str = ""
     salary: str = ""
     experience: str = ""
-    schedule: str = ""
+    work_format: str = ""
     employer_industry: str = ""
     skills: list[str] = field(default_factory=list)
     matches: list[Match] = field(default_factory=list)
@@ -198,8 +198,7 @@ class VacancyPageParser(HTMLParser):
         self.employer_id = ""
         self.salary_parts: list[str] = []
         self.experience_parts: list[str] = []
-        self.employment_parts: list[str] = []
-        self.schedule_parts: list[str] = []
+        self.work_format_parts: list[str] = []
         self.description_parts: list[str] = []
         self.skill_parts: list[str] = []
         self._capture_title_depth = 0
@@ -207,8 +206,7 @@ class VacancyPageParser(HTMLParser):
         self._company_candidate_parts: list[str] = []
         self._capture_salary_depth = 0
         self._capture_experience_depth = 0
-        self._capture_employment_depth = 0
-        self._capture_schedule_depth = 0
+        self._capture_work_format_depth = 0
         self._capture_description_depth = 0
         self._capture_skill_depth = 0
 
@@ -246,17 +244,10 @@ class VacancyPageParser(HTMLParser):
         elif self._capture_experience_depth:
             self._capture_experience_depth += 1
 
-        if data_qa == "common-employment-text":
-            self._capture_employment_depth = 1
-        elif self._capture_employment_depth:
-            self._capture_employment_depth += 1
-
-        if data_qa in {"work-schedule-by-days-text", "working-hours-text", "work-formats-text"}:
-            if self.schedule_parts and self.schedule_parts[-1] != "\n":
-                self.schedule_parts.append("\n")
-            self._capture_schedule_depth = 1
-        elif self._capture_schedule_depth:
-            self._capture_schedule_depth += 1
+        if data_qa == "work-formats-text":
+            self._capture_work_format_depth = 1
+        elif self._capture_work_format_depth:
+            self._capture_work_format_depth += 1
 
         if data_qa == "vacancy-description":
             self._capture_description_depth = 1
@@ -287,10 +278,8 @@ class VacancyPageParser(HTMLParser):
             self._capture_salary_depth -= 1
         if self._capture_experience_depth:
             self._capture_experience_depth -= 1
-        if self._capture_employment_depth:
-            self._capture_employment_depth -= 1
-        if self._capture_schedule_depth:
-            self._capture_schedule_depth -= 1
+        if self._capture_work_format_depth:
+            self._capture_work_format_depth -= 1
         if self._capture_description_depth:
             if tag in {"p", "li", "div"}:
                 self.description_parts.append("\n")
@@ -308,10 +297,8 @@ class VacancyPageParser(HTMLParser):
             self.salary_parts.append(data)
         if self._capture_experience_depth:
             self.experience_parts.append(data)
-        if self._capture_employment_depth:
-            self.employment_parts.append(data)
-        if self._capture_schedule_depth:
-            self.schedule_parts.append(data)
+        if self._capture_work_format_depth:
+            self.work_format_parts.append(data)
         if self._capture_description_depth:
             self.description_parts.append(data)
         if self._capture_skill_depth:
@@ -329,15 +316,11 @@ def compact_inline_text(value: str) -> str:
 
 def strip_attribute_label(value: str) -> str:
     return re.sub(
-        r"^(?:Опыт работы|График|Рабочие часы|Формат работы|Занятость)\s*:\s*",
+        r"^Формат работы\s*:\s*",
         "",
         compact_inline_text(value),
         flags=re.I,
     ).strip()
-
-
-def join_vacancy_attributes(*values: str) -> str:
-    return "; ".join(unique(value for value in (strip_attribute_label(item) for item in values) if value))
 
 
 def employer_id_from_url(value: str) -> str:
@@ -469,8 +452,8 @@ def search_url(query: str, hh: HhSettings, page: int) -> str:
         params.append(("search_field", field))
     for experience in filters.experience:
         params.append(("experience", experience))
-    for schedule in filters.schedule:
-        params.append(("schedule", schedule))
+    for work_format in filters.work_format:
+        params.append(("work_format", work_format))
     for employment in filters.employment:
         params.append(("employment", employment))
     for industry in filters.industry:
@@ -649,10 +632,7 @@ def parse_vacancy(vacancy_id: str, page_html: str) -> Vacancy:
     employer_id = parser.employer_id
     salary = compact_inline_text(" ".join(parser.salary_parts))
     experience = compact_inline_text(" ".join(parser.experience_parts))
-    schedule = join_vacancy_attributes(
-        " ".join(parser.employment_parts),
-        *compact_text("".join(parser.schedule_parts)).splitlines(),
-    )
+    work_format = strip_attribute_label(" ".join(parser.work_format_parts))
     description = compact_text("".join(parser.description_parts))
     skills = unique(extract_skills_from_state(page_html) + [compact_text(s) for s in parser.skill_parts])
 
@@ -674,7 +654,7 @@ def parse_vacancy(vacancy_id: str, page_html: str) -> Vacancy:
         employer_id=employer_id,
         salary=salary,
         experience=experience,
-        schedule=schedule,
+        work_format=work_format,
         skills=skills,
     )
 
@@ -937,7 +917,7 @@ def vacancy_to_record(
             "employer_id": vacancy.employer_id,
             "salary": vacancy.salary,
             "experience": vacancy.experience,
-            "schedule": vacancy.schedule,
+            "work_format": vacancy.work_format,
             "employer_industry": vacancy.employer_industry,
             "url": vacancy.url,
             "matched_terms": [],
@@ -952,7 +932,7 @@ def vacancy_to_record(
         "employer_id": vacancy.employer_id,
         "salary": vacancy.salary,
         "experience": vacancy.experience,
-        "schedule": vacancy.schedule,
+        "work_format": vacancy.work_format,
         "employer_industry": vacancy.employer_industry,
         "url": vacancy.url,
         "matched_terms": vacancy.matched_terms,
@@ -1024,7 +1004,7 @@ def vacancy_from_record(record: dict[str, object], profile: SearchProfile) -> Va
         employer_id=str(record.get("employer_id", "")),
         salary=str(record.get("salary", "")),
         experience=str(record.get("experience", "")),
-        schedule=str(record.get("schedule", "")),
+        work_format=str(record.get("work_format", "")),
         skills=[str(item) for item in skills if isinstance(item, str)],
         matches=[
             match_from_record(item)
@@ -1084,8 +1064,8 @@ def fill_missing_vacancy_fields(vacancy: Vacancy, cached_vacancy: Vacancy) -> No
         vacancy.salary = cached_vacancy.salary
     if not vacancy.experience:
         vacancy.experience = cached_vacancy.experience
-    if not vacancy.schedule:
-        vacancy.schedule = cached_vacancy.schedule
+    if not vacancy.work_format:
+        vacancy.work_format = cached_vacancy.work_format
 
 
 def vacancy_from_checkpoint_record(
@@ -1293,7 +1273,7 @@ def filters_to_record(filters: HhFilters) -> dict[str, object]:
     return {
         "search_field": list(filters.search_field),
         "experience": list(filters.experience),
-        "schedule": list(filters.schedule),
+        "work_format": list(filters.work_format),
         "employment": list(filters.employment),
         "industry": list(filters.industry),
         "salary": filters.salary,
@@ -1324,8 +1304,9 @@ def require_filter_list(
                 f"{path}: hh.filters.{key}[{index}] has unsupported value {normalized!r}; "
                 f"allowed values: {', '.join(sorted(allowed_values))}"
             )
-        if normalized not in result:
-            result.append(normalized)
+        if normalized in result:
+            raise ValueError(f"{path}: hh.filters.{key}[{index}] has duplicate value {normalized!r}")
+        result.append(normalized)
     return tuple(result)
 
 
@@ -1349,8 +1330,9 @@ def require_hh_id_list(
                 f"{path}: hh.filters.{key}[{index}] must be an hh.ru dictionary id, "
                 "for example '7' or '7.540'"
             )
-        if normalized not in result:
-            result.append(normalized)
+        if normalized in result:
+            raise ValueError(f"{path}: hh.filters.{key}[{index}] has duplicate value {normalized!r}")
+        result.append(normalized)
     return tuple(result)
 
 
@@ -1371,11 +1353,11 @@ def require_optional_positive_int(
 
 
 def load_hh_filters(hh_raw: dict[str, object], path: Path) -> HhFilters:
-    filters_raw = hh_raw.get("filters", {})
-    if filters_raw is None:
-        filters_raw = {}
+    if "filters" not in hh_raw:
+        raise ValueError(f"{path}: missing hh.filters")
+    filters_raw = hh_raw.get("filters")
     if not isinstance(filters_raw, dict):
-        raise ValueError(f"{path}: hh.filters must be an object when present")
+        raise ValueError(f"{path}: hh.filters must be an object")
     unknown_filters = set(filters_raw) - HH_FILTER_FIELDS
     if unknown_filters:
         raise ValueError(f"{path}: unknown hh.filters fields: {', '.join(sorted(unknown_filters))}")
@@ -1397,7 +1379,7 @@ def load_hh_filters(hh_raw: dict[str, object], path: Path) -> HhFilters:
     return HhFilters(
         search_field=require_filter_list(filters_raw, "search_field", SEARCH_FIELD_VALUES, path),
         experience=require_filter_list(filters_raw, "experience", EXPERIENCE_VALUES, path),
-        schedule=require_filter_list(filters_raw, "schedule", SCHEDULE_VALUES, path),
+        work_format=require_filter_list(filters_raw, "work_format", WORK_FORMAT_VALUES, path),
         employment=require_filter_list(filters_raw, "employment", EMPLOYMENT_VALUES, path),
         industry=require_hh_id_list(filters_raw, "industry", path),
         salary=require_optional_positive_int(filters_raw, "salary", path),
@@ -1435,11 +1417,14 @@ def load_profile(path: Path) -> SearchProfile:
     max_pages = hh_raw.get("max_pages")
     if not isinstance(area, str) or not area.strip():
         raise ValueError(f"{path}: hh.area must be a non-empty string")
+    area = area.strip()
+    if not re.fullmatch(r"\d+", area):
+        raise ValueError(f"{path}: hh.area must be an hh.ru area id, for example '113', '2', or '0'")
     if isinstance(max_pages, bool) or not isinstance(max_pages, int) or max_pages < 1:
         raise ValueError(f"{path}: hh.max_pages must be a positive integer")
 
     hh = HhSettings(
-        area=area.strip(),
+        area=area,
         max_pages=max_pages,
         search_delay_min=require_number(hh_raw, "search_delay_min", path),
         search_delay_max=require_number(hh_raw, "search_delay_max", path),

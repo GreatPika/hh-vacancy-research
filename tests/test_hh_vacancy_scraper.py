@@ -4,6 +4,7 @@ import os
 import tempfile
 from pathlib import Path
 from unittest.mock import patch
+from urllib.parse import parse_qs, urlparse
 
 import scripts.hh_vacancy_scraper as scraper
 from scripts.hh_vacancy_scraper import parse_vacancy, vacancy_to_record
@@ -35,6 +36,32 @@ class VacancyParsingTest(unittest.TestCase):
             search_terms={"RAG": ["RAG"]},
         )
 
+    def profile_payload(self, filters: dict[str, object] | None = None, area: str = "2") -> dict[str, object]:
+        hh: dict[str, object] = {
+            "area": area,
+            "max_pages": 1,
+            "search_delay_min": 0,
+            "search_delay_max": 0,
+            "vacancy_delay_min": 0,
+            "vacancy_delay_max": 0,
+        }
+        if filters is not None:
+            hh["filters"] = filters
+        return {
+            "title": "Profile validation test",
+            "hh": hh,
+            "match_scope": {
+                "title": False,
+                "company": False,
+                "description": True,
+                "skills": False,
+            },
+            "search_terms": {"MCP": ["MCP"]},
+            "term_patterns": {"MCP": ["MCP"]},
+            "exclude_patterns": {},
+            "notes": "",
+        }
+
     def test_parse_vacancy_extracts_visible_vacancy_attributes(self) -> None:
         vacancy = parse_vacancy(
             "123",
@@ -65,7 +92,7 @@ class VacancyParsingTest(unittest.TestCase):
 
         self.assertEqual(vacancy.salary, "от 300 000 ₽ на руки")
         self.assertEqual(vacancy.experience, "3–6 лет")
-        self.assertEqual(vacancy.schedule, "Полная занятость; 5/2; 8; удалённо")
+        self.assertEqual(vacancy.work_format, "удалённо")
 
     def test_parse_vacancy_extracts_employer_id_for_profile_enrichment(self) -> None:
         vacancy = parse_vacancy(
@@ -534,8 +561,229 @@ class VacancyParsingTest(unittest.TestCase):
 
         self.assertEqual(record["salary"], "300 000 ₽")
         self.assertEqual(record["experience"], "3–6 лет")
-        self.assertEqual(record["schedule"], "удалённо")
+        self.assertEqual(record["work_format"], "удалённо")
         self.assertEqual(record["employer_industry"], "")
+
+    def test_search_url_includes_native_work_format_filters(self) -> None:
+        hh = scraper.HhSettings(
+            area="2",
+            max_pages=1,
+            search_delay_min=0,
+            search_delay_max=0,
+            vacancy_delay_min=0,
+            vacancy_delay_max=0,
+            filters=scraper.HhFilters(work_format=("REMOTE", "HYBRID")),
+        )
+
+        url = scraper.search_url("MCP", hh, 0)
+
+        self.assertIn("work_format=REMOTE", url)
+        self.assertIn("work_format=HYBRID", url)
+        self.assertNotIn("schedule=", url)
+
+    def test_search_url_includes_all_supported_filters(self) -> None:
+        hh = scraper.HhSettings(
+            area="2",
+            max_pages=1,
+            search_delay_min=0,
+            search_delay_max=0,
+            vacancy_delay_min=0,
+            vacancy_delay_max=0,
+            filters=scraper.HhFilters(
+                search_field=("name", "company_name", "description"),
+                experience=("noExperience", "between1And3", "between3And6", "moreThan6"),
+                work_format=("ON_SITE", "REMOTE", "HYBRID", "FIELD_WORK"),
+                employment=("full", "part", "project", "volunteer", "probation"),
+                industry=("7", "7.540"),
+                salary=100000,
+                only_with_salary=True,
+                order_by="salary_desc",
+                period=30,
+            ),
+        )
+
+        query = parse_qs(urlparse(scraper.search_url("MCP", hh, 0)).query)
+
+        self.assertEqual(query["area"], ["2"])
+        self.assertEqual(query["text"], ["MCP"])
+        self.assertEqual(query["page"], ["0"])
+        self.assertEqual(query["search_field"], ["name", "company_name", "description"])
+        self.assertEqual(query["experience"], ["noExperience", "between1And3", "between3And6", "moreThan6"])
+        self.assertEqual(query["work_format"], ["ON_SITE", "REMOTE", "HYBRID", "FIELD_WORK"])
+        self.assertEqual(query["employment"], ["full", "part", "project", "volunteer", "probation"])
+        self.assertEqual(query["industry"], ["7", "7.540"])
+        self.assertEqual(query["salary"], ["100000"])
+        self.assertEqual(query["only_with_salary"], ["true"])
+        self.assertEqual(query["order_by"], ["salary_desc"])
+        self.assertEqual(query["period"], ["30"])
+        self.assertNotIn("schedule", query)
+
+    def test_load_profile_accepts_native_work_format_filters(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "profile.json"
+            path.write_text(
+                scraper.json.dumps(
+                    {
+                        "title": "Work format test",
+                        "hh": {
+                            "area": "2",
+                            "max_pages": 1,
+                            "search_delay_min": 0,
+                            "search_delay_max": 0,
+                            "vacancy_delay_min": 0,
+                            "vacancy_delay_max": 0,
+                            "filters": {
+                                "search_field": ["description"],
+                                "experience": [],
+                                "work_format": ["REMOTE", "HYBRID"],
+                                "employment": [],
+                                "industry": [],
+                                "salary": None,
+                                "only_with_salary": False,
+                                "order_by": "relevance",
+                                "period": None,
+                            },
+                        },
+                        "match_scope": {
+                            "title": False,
+                            "company": False,
+                            "description": True,
+                            "skills": False,
+                        },
+                        "search_terms": {"MCP": ["MCP"]},
+                        "term_patterns": {"MCP": ["MCP"]},
+                        "exclude_patterns": {},
+                        "notes": "",
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+
+            profile = scraper.load_profile(path)
+
+        self.assertEqual(profile.hh.filters.work_format, ("REMOTE", "HYBRID"))
+
+    def test_load_profile_rejects_duplicate_filter_values(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "profile.json"
+            payload = self.profile_payload(
+                {
+                    "search_field": ["description"],
+                    "experience": [],
+                    "work_format": ["REMOTE", "REMOTE"],
+                    "employment": [],
+                    "industry": [],
+                    "salary": None,
+                    "only_with_salary": False,
+                    "order_by": "relevance",
+                    "period": None,
+                }
+            )
+            path.write_text(scraper.json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+
+            with self.assertRaisesRegex(ValueError, "duplicate value"):
+                scraper.load_profile(path)
+
+    def test_load_profile_rejects_duplicate_industry_ids(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "profile.json"
+            payload = self.profile_payload(
+                {
+                    "search_field": ["description"],
+                    "experience": [],
+                    "work_format": [],
+                    "employment": [],
+                    "industry": ["7", "7"],
+                    "salary": None,
+                    "only_with_salary": False,
+                    "order_by": "relevance",
+                    "period": None,
+                }
+            )
+            path.write_text(scraper.json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+
+            with self.assertRaisesRegex(ValueError, "duplicate value"):
+                scraper.load_profile(path)
+
+    def test_load_profile_requires_filters_block(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "profile.json"
+            path.write_text(
+                scraper.json.dumps(self.profile_payload(filters=None), ensure_ascii=False),
+                encoding="utf-8",
+            )
+
+            with self.assertRaisesRegex(ValueError, "missing hh.filters"):
+                scraper.load_profile(path)
+
+    def test_load_profile_rejects_non_numeric_area(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "profile.json"
+            payload = self.profile_payload(
+                {
+                    "search_field": ["description"],
+                    "experience": [],
+                    "work_format": [],
+                    "employment": [],
+                    "industry": [],
+                    "salary": None,
+                    "only_with_salary": False,
+                    "order_by": "relevance",
+                    "period": None,
+                },
+                area="not-an-area-id",
+            )
+            path.write_text(scraper.json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+
+            with self.assertRaisesRegex(ValueError, "hh.area"):
+                scraper.load_profile(path)
+
+    def test_load_profile_rejects_schedule_filter(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "profile.json"
+            path.write_text(
+                scraper.json.dumps(
+                    {
+                        "title": "Legacy schedule test",
+                        "hh": {
+                            "area": "2",
+                            "max_pages": 1,
+                            "search_delay_min": 0,
+                            "search_delay_max": 0,
+                            "vacancy_delay_min": 0,
+                            "vacancy_delay_max": 0,
+                            "filters": {
+                                "search_field": ["description"],
+                                "experience": [],
+                                "schedule": ["fullDay"],
+                                "work_format": [],
+                                "employment": [],
+                                "industry": [],
+                                "salary": None,
+                                "only_with_salary": False,
+                                "order_by": "relevance",
+                                "period": None,
+                            },
+                        },
+                        "match_scope": {
+                            "title": False,
+                            "company": False,
+                            "description": True,
+                            "skills": False,
+                        },
+                        "search_terms": {"MCP": ["MCP"]},
+                        "term_patterns": {"MCP": ["MCP"]},
+                        "exclude_patterns": {},
+                        "notes": "",
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+
+            with self.assertRaisesRegex(ValueError, "unknown hh.filters fields: schedule"):
+                scraper.load_profile(path)
 
     def test_validate_work_paths_allows_current_project_outputs(self) -> None:
         project_outputs = Path.cwd() / "outputs" / "hh-vacancy-research" / "sample"

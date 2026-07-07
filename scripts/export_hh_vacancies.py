@@ -23,7 +23,7 @@ VACANCY_HEADERS = [
     "Компания",
     "Заработная плата",
     "Опыт",
-    "График",
+    "Формат работы",
     "Отрасль работодателя",
     "Ссылка",
     "Поисковые группы",
@@ -179,7 +179,7 @@ def rows_for(vacancies: list[dict[str, object]]) -> list[list[str]]:
                 str(vacancy.get("company", "")),
                 str(vacancy.get("salary", "")),
                 str(vacancy.get("experience", "")),
-                str(vacancy.get("schedule", "")),
+                str(vacancy.get("work_format", "")),
                 str(vacancy.get("employer_industry", "")),
                 str(vacancy.get("url", "")),
                 matched_terms(vacancy),
@@ -203,7 +203,7 @@ def validate_input(data: object, source_path: Path) -> dict[str, object]:
         for field in ("title", "company", "url", "description"):
             if field in vacancy and not isinstance(vacancy[field], str):
                 raise ValueError(f"{source_path}: vacancies[{index}].{field} must be a string")
-        for field in ("salary", "experience", "schedule", "employer_industry"):
+        for field in ("salary", "experience", "work_format", "employer_industry"):
             if field in vacancy and not isinstance(vacancy[field], str):
                 raise ValueError(f"{source_path}: vacancies[{index}].{field} must be a string")
         if "skills" in vacancy and not isinstance(vacancy["skills"], list):

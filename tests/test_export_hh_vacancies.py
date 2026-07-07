@@ -21,7 +21,7 @@ class ExportRowsTest(unittest.TestCase):
                 "Компания",
                 "Заработная плата",
                 "Опыт",
-                "График",
+                "Формат работы",
                 "Отрасль работодателя",
                 "Ссылка",
                 "Поисковые группы",
@@ -38,7 +38,7 @@ class ExportRowsTest(unittest.TestCase):
                 "company": "Example AI",
                 "salary": "от 300 000 ₽ на руки",
                 "experience": "3–6 лет",
-                "schedule": "5/2; удалённо; 8 часов",
+                "work_format": "удалённо",
                 "employer_industry": "Информационные технологии",
                 "url": "https://hh.ru/vacancy/1",
                 "matched_terms": ["RAG"],
@@ -55,7 +55,7 @@ class ExportRowsTest(unittest.TestCase):
                 "Example AI",
                 "от 300 000 ₽ на руки",
                 "3–6 лет",
-                "5/2; удалённо; 8 часов",
+                "удалённо",
                 "Информационные технологии",
                 "https://hh.ru/vacancy/1",
                 "RAG",
@@ -73,7 +73,7 @@ class ExportRowsTest(unittest.TestCase):
             write_markdown(path, {"title": "Vacancies"}, rows)
 
             self.assertIn(
-                "| Название вакансии | Компания | Заработная плата | Опыт | График | Отрасль работодателя | Ссылка | Поисковые группы | Поля совпадения | Навыки | Описание |",
+                "| Название вакансии | Компания | Заработная плата | Опыт | Формат работы | Отрасль работодателя | Ссылка | Поисковые группы | Поля совпадения | Навыки | Описание |",
                 path.read_text(encoding="utf-8"),
             )
 

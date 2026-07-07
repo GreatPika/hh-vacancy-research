@@ -339,7 +339,7 @@ async function doctor(options) {
         filters: {
           search_field: [],
           experience: [],
-          schedule: [],
+          work_format: [],
           employment: [],
           industry: [],
           salary: null,

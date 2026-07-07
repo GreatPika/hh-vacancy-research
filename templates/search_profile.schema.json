@@ -24,12 +24,13 @@
         "search_delay_min",
         "search_delay_max",
         "vacancy_delay_min",
-        "vacancy_delay_max"
+        "vacancy_delay_max",
+        "filters"
       ],
       "properties": {
         "area": {
           "type": "string",
-          "minLength": 1
+          "pattern": "^\\d+$"
         },
         "max_pages": {
           "type": "integer",
@@ -78,15 +79,14 @@
               },
               "uniqueItems": true
             },
-            "schedule": {
+            "work_format": {
               "type": "array",
               "items": {
                 "enum": [
-                  "remote",
-                  "fullDay",
-                  "shift",
-                  "flexible",
-                  "flyInFlyOut"
+                  "ON_SITE",
+                  "REMOTE",
+                  "HYBRID",
+                  "FIELD_WORK"
                 ]
               },
               "uniqueItems": true

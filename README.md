@@ -100,7 +100,7 @@ The skill asks users about filters that can be represented by the bundled scrape
 | Search intent | The roles, companies, industries, technologies, tools, requirements, skills, or topics to search for. |
 | hh.ru search field | Where hh.ru searches the query text: everywhere, vacancy titles, company names, or descriptions. |
 | Experience | hh.ru experience levels: no experience, 1-3 years, 3-6 years, 6+ years. |
-| Schedule | hh.ru schedule filters: remote, full day, shift, flexible, fly-in/fly-out. |
+| Work format | hh.ru work format filters: on site, remote, hybrid, or field work. |
 | Employment | hh.ru employment filters: full-time, part-time, project, volunteer, probation/internship. |
 | Company industry | Employer business industry from `https://api.hh.ru/industries`, such as IT, media, banking, logistics, or a narrower nested industry. |
 | Salary | Minimum salary and whether to include only vacancies with visible salary. |
@@ -111,7 +111,7 @@ The skill asks users about filters that can be represented by the bundled scrape
 
 The local match scope is an internal profile setting derived from the selected hh.ru search field. The normal wizard does not ask users to configure it separately.
 
-The skill does not apply native hh.ru filters for office/hybrid specifically, employer type, metro, education, language, or professional role. The agent can still encode user-provided constraints as search terms, accepted meanings, or exclusions when that is practical.
+The skill does not apply native hh.ru filters for employer type, metro, education, language, or professional role. The agent can still encode user-provided constraints as search terms, accepted meanings, or exclusions when that is practical.
 
 ## Operational Notes
 

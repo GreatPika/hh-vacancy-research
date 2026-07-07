@@ -157,7 +157,7 @@ Supported filter blocks:
 - geography;
 - hh.ru text search fields;
 - experience;
-- schedule;
+- work format;
 - employment;
 - company industry;
 - salary;
@@ -169,13 +169,13 @@ Each filter must include a plain Russian explanation, a default, and an option t
 
 Fixed filter values must come from repository source of truth: `templates/search_profile.schema.json`, `scripts/hh_vacancy_scraper.py`, and `references/profile_mapping.md`. The agent must not invent values.
 
-The filter wizard must not ask the user to configure unsupported native hh.ru filters. Unsupported examples include office/hybrid specifically, employer type, metro, education, language, professional role, and distance sorting. If the user volunteers a text-like constraint, the agent can represent it as search terms, accepted terms, or exclusions. If the user asks for a native-only constraint that the scraper cannot represent, the agent must say so plainly and offer the closest supported alternative.
+The filter wizard must not ask the user to configure unsupported native hh.ru filters. Unsupported examples include employer type, metro, education, language, professional role, and distance sorting. If the user volunteers a text-like constraint, the agent can represent it as search terms, accepted terms, or exclusions. If the user asks for a native-only constraint that the scraper cannot represent, the agent must say so plainly and offer the closest supported alternative.
 
 Default filter choices:
 
 - geography: Russia unless the user asks for another city, country, region, or all hh.ru regions;
 - hh.ru text search fields: search everywhere;
-- optional filters such as experience, schedule, employment, industry, salary, visible salary, and freshness: unset unless the user chooses them;
+- optional filters such as experience, work format, employment, industry, salary, visible salary, and freshness: unset unless the user chooses them;
 - sort order: relevance;
 - full-card match fields: title, description, and skills enabled; company enabled only when the user is searching for company names or company mentions.
 
@@ -190,9 +190,9 @@ Example progress copy:
 Регион: Россия
 Где искать на hh.ru: везде
 Опыт: без фильтра
-График: без фильтра
+Формат работы: без фильтра
 
-Следующий шаг: график работы.
+Следующий шаг: формат работы.
 Оставляем без фильтра или ограничиваем?
 ```
 
