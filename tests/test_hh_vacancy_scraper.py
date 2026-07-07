@@ -846,6 +846,47 @@ class VacancyParsingTest(unittest.TestCase):
         self.assertEqual(query["period"], ["30"])
         self.assertNotIn("schedule", query)
 
+    def test_collect_search_ids_tracks_queries_by_vacancy(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            args = self.scraper_args(root)
+            profile = scraper.SearchProfile(
+                title="Search query tracking",
+                hh=scraper.HhSettings(
+                    area="1",
+                    max_pages=1,
+                    search_delay_min=0,
+                    search_delay_max=0,
+                    vacancy_delay_min=0,
+                    vacancy_delay_max=0,
+                ),
+                match_scope={"title": True, "description": True, "skills": True, "company": False},
+                search_terms={"AI": ["RAG", "LangChain"]},
+                term_patterns={"AI": [scraper.re.compile("RAG", scraper.re.I)]},
+                exclude_patterns={},
+            )
+
+            def fetch_url(url: str, *_args: object) -> str:
+                query = parse_qs(urlparse(url).query)
+                if query["text"] == ["RAG"]:
+                    return '<a href="/vacancy/101">one</a><a href="/vacancy/202">two</a>'
+                if query["text"] == ["LangChain"]:
+                    return '<a href="/vacancy/202">two</a><a href="/vacancy/303">three</a>'
+                raise AssertionError(f"unexpected url: {url}")
+
+            with patch.object(scraper, "fetch_url", side_effect=fetch_url):
+                search_results = scraper.collect_search_ids(args, profile)
+
+        self.assertEqual(search_results.ids_by_group, {"AI": ["101", "202", "303"]})
+        self.assertEqual(
+            search_results.queries_by_vacancy,
+            {
+                "101": ["RAG"],
+                "202": ["RAG", "LangChain"],
+                "303": ["LangChain"],
+            },
+        )
+
     def test_load_profile_accepts_native_work_format_filters(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "profile.json"

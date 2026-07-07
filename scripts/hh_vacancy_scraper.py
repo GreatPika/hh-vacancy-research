@@ -163,6 +163,12 @@ class SearchProfile:
     notes: str = ""
 
 
+@dataclass(frozen=True)
+class SearchResults:
+    ids_by_group: dict[str, list[str]]
+    queries_by_vacancy: dict[str, list[str]]
+
+
 @dataclass
 class Match:
     term: str
@@ -848,8 +854,9 @@ def matching_terms(vacancy: Vacancy, profile: SearchProfile) -> list[Match]:
     return matches
 
 
-def collect_search_ids(args: argparse.Namespace, profile: SearchProfile) -> dict[str, list[str]]:
+def collect_search_ids(args: argparse.Namespace, profile: SearchProfile) -> SearchResults:
     found: dict[str, list[str]] = {}
+    queries_by_vacancy: dict[str, list[str]] = {}
     for label, queries in profile.search_terms.items():
         for query in queries:
             previous_ids: set[str] = set()
@@ -879,6 +886,10 @@ def collect_search_ids(args: argparse.Namespace, profile: SearchProfile) -> dict
                 )
                 found.setdefault(label, [])
                 found[label].extend(ids)
+                for vacancy_id in ids:
+                    vacancy_queries = queries_by_vacancy.setdefault(vacancy_id, [])
+                    if query not in vacancy_queries:
+                        vacancy_queries.append(query)
                 previous_ids.update(ids)
 
                 if not ids:
@@ -888,14 +899,17 @@ def collect_search_ids(args: argparse.Namespace, profile: SearchProfile) -> dict
 
                 if empty_pages >= 2 or not has_next_page(search_html, page):
                     break
-    return {term: unique(ids) for term, ids in found.items()}
+    return SearchResults(
+        ids_by_group={term: unique(ids) for term, ids in found.items()},
+        queries_by_vacancy=queries_by_vacancy,
+    )
 
 
 def collect_vacancies(
     args: argparse.Namespace,
     profile: SearchProfile,
     vacancy_ids: list[str],
-    search_ids: dict[str, list[str]],
+    search_results: SearchResults,
 ) -> list[Vacancy]:
     fingerprint = profile_fingerprint(profile)
     vacancy_id_set = set(vacancy_ids)
@@ -1005,7 +1019,7 @@ def collect_vacancies(
         )
         processed_since_write += 1
         if args.write_every > 0 and processed_since_write >= args.write_every:
-            write_outputs(args, profile, vacancies, search_ids, vacancy_ids)
+            write_outputs(args, profile, vacancies, search_results.ids_by_group, vacancy_ids)
             processed_since_write = 0
     return vacancies
 
@@ -1724,14 +1738,14 @@ def main() -> int:
         return 0
 
     args.cache_dir.mkdir(parents=True, exist_ok=True)
-    search_ids = collect_search_ids(args, profile)
-    vacancy_ids = unique(vacancy_id for ids in search_ids.values() for vacancy_id in ids)
+    search_results = collect_search_ids(args, profile)
+    vacancy_ids = unique(vacancy_id for ids in search_results.ids_by_group.values() for vacancy_id in ids)
     if args.limit_vacancies:
         vacancy_ids = vacancy_ids[: args.limit_vacancies]
     print(f"unique vacancy ids to inspect: {len(vacancy_ids)}", flush=True)
 
-    vacancies = collect_vacancies(args, profile, vacancy_ids, search_ids)
-    write_outputs(args, profile, vacancies, search_ids, vacancy_ids)
+    vacancies = collect_vacancies(args, profile, vacancy_ids, search_results)
+    write_outputs(args, profile, vacancies, search_results.ids_by_group, vacancy_ids)
     print(f"wrote {args.output_json}", flush=True)
     return 0
 
