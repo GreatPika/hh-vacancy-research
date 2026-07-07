@@ -967,6 +967,7 @@ def collect_vacancies(
         except FetchError as exc:
             if exc.kind == "permanent":
                 vacancy = Vacancy(vacancy_id=vacancy_id, title="", description="", url=url)
+                vacancy.search_queries = list(queries_by_vacancy.get(vacancy_id, []))
                 print(f"skip {vacancy_id}: {exc}", flush=True)
                 append_checkpoint(
                     args.checkpoint_jsonl,

@@ -940,6 +940,27 @@ class VacancyParsingTest(unittest.TestCase):
             records = list(scraper.iter_checkpoint_records(args.checkpoint_jsonl))
             self.assertEqual(records[-1]["search_queries"], ["RAG", "retrieval augmented generation"])
 
+    def test_collect_vacancies_sets_search_queries_for_permanent_skips(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            profile = self.search_profile()
+            args = self.scraper_args(root)
+            search_results = scraper.SearchResults(
+                ids_by_group={"RAG": ["123"]},
+                queries_by_vacancy={"123": ["RAG"]},
+            )
+
+            with patch.object(
+                scraper,
+                "fetch_url",
+                side_effect=scraper.FetchError("blocked", kind="permanent"),
+            ):
+                vacancies = scraper.collect_vacancies(args, profile, ["123"], search_results)
+
+            self.assertEqual(vacancies, [])
+            records = list(scraper.iter_checkpoint_records(args.checkpoint_jsonl))
+            self.assertEqual(records[-1]["search_queries"], ["RAG"])
+
     def test_load_profile_accepts_native_work_format_filters(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "profile.json"
