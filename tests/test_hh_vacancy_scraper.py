@@ -94,6 +94,110 @@ class VacancyParsingTest(unittest.TestCase):
         self.assertEqual(vacancy.experience, "3–6 лет")
         self.assertEqual(vacancy.work_format, "удалённо")
 
+    def test_parse_vacancy_unescapes_json_description_fallback(self) -> None:
+        vacancy = parse_vacancy(
+            "123",
+            """
+            <script>
+            {"description":"&lt;p&gt;First &lt;strong&gt;RAG&lt;/strong&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Use GitHub Copilot&lt;/li&gt;&lt;/ul&gt;"}
+            </script>
+            """,
+        )
+
+        self.assertEqual(vacancy.description, "First RAG\nUse GitHub Copilot")
+
+    def test_parse_vacancy_preserves_self_closing_breaks_in_json_description(self) -> None:
+        vacancy = parse_vacancy(
+            "123",
+            """
+            <script>
+            {"description":"&lt;p&gt;First&lt;br/&gt;Second&lt;/p&gt;"}
+            </script>
+            """,
+        )
+
+        self.assertEqual(vacancy.description, "First\nSecond")
+
+    def test_parse_vacancy_uses_short_vacancy_state_fallback(self) -> None:
+        vacancy = parse_vacancy(
+            "134105824",
+            """
+            <script>
+            {"vacancies":{"134105824":{"shortVacancy":{
+              "vacancyId":134105824,
+              "name":"Middle Unity Developer (Marketing, Playable Ads)",
+              "company":{"id":2666179,"name":"Azur Games","visibleName":"Azur Games"}
+            }}},"description":"&lt;p&gt;Use &lt;strong&gt;GitHub Copilot&lt;/strong&gt;&lt;/p&gt;"}
+            </script>
+            """,
+        )
+
+        self.assertEqual(vacancy.title, "Middle Unity Developer (Marketing, Playable Ads)")
+        self.assertEqual(vacancy.company, "Azur Games")
+        self.assertEqual(vacancy.employer_id, "2666179")
+        self.assertEqual(vacancy.description, "Use GitHub Copilot")
+
+    def test_parse_vacancy_uses_matching_short_vacancy_state(self) -> None:
+        vacancy = parse_vacancy(
+            "134105824",
+            """
+            <script>
+            {"vacancies":{
+              "111":{"shortVacancy":{
+                "vacancyId":111,
+                "name":"Wrong Vacancy",
+                "company":{"id":1111,"name":"Wrong Company"}
+              }},
+              "134105824":{"shortVacancy":{
+                "vacancyId":134105824,
+                "name":"Middle Unity Developer (Marketing, Playable Ads)",
+                "company":{"id":2666179,"name":"Azur Games"}
+              }}
+            },"description":"&lt;p&gt;Use &lt;strong&gt;GitHub Copilot&lt;/strong&gt;&lt;/p&gt;"}
+            </script>
+            """,
+        )
+
+        self.assertEqual(vacancy.title, "Middle Unity Developer (Marketing, Playable Ads)")
+        self.assertEqual(vacancy.company, "Azur Games")
+        self.assertEqual(vacancy.employer_id, "2666179")
+
+    def test_parse_vacancy_ignores_non_object_id_key_before_other_short_vacancy(self) -> None:
+        vacancy = parse_vacancy(
+            "134105824",
+            """
+            <script>
+            {"134105824":true,"other":{"shortVacancy":{
+              "vacancyId":111,
+              "name":"Wrong Vacancy",
+              "company":{"id":1111,"name":"Wrong Company"}
+            }}}
+            </script>
+            """,
+        )
+
+        self.assertEqual(vacancy.title, "")
+        self.assertEqual(vacancy.company, "")
+        self.assertEqual(vacancy.employer_id, "")
+
+    def test_parse_vacancy_ignores_non_object_short_vacancy_before_other_object(self) -> None:
+        vacancy = parse_vacancy(
+            "134105824",
+            """
+            <script>
+            {"shortVacancy":null,"other":{
+              "vacancyId":134105824,
+              "name":"Wrong Vacancy",
+              "company":{"id":1111,"name":"Wrong Company"}
+            }}
+            </script>
+            """,
+        )
+
+        self.assertEqual(vacancy.title, "")
+        self.assertEqual(vacancy.company, "")
+        self.assertEqual(vacancy.employer_id, "")
+
     def test_parse_vacancy_extracts_employer_id_for_profile_enrichment(self) -> None:
         vacancy = parse_vacancy(
             "123",
@@ -544,6 +648,130 @@ class VacancyParsingTest(unittest.TestCase):
             self.assertEqual(second[0].description, "Build RAG systems")
             records = list(scraper.iter_checkpoint_records(args.checkpoint_jsonl))
             self.assertEqual(records[-1]["description"], "Build RAG systems")
+
+    def test_resume_refreshes_escaped_html_description_from_cache(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            cache_dir = Path(tmp) / "cache"
+            url = "https://hh.ru/vacancy/123"
+            cache_path = scraper.cache_path_for_url(cache_dir, "vacancies", url, "123")
+            cache_path.parent.mkdir(parents=True)
+            cache_path.write_text(
+                """
+                <script>
+                {"shortVacancy":{
+                  "vacancyId":123,
+                  "name":"Middle Unity Developer (Marketing, Playable Ads)",
+                  "company":{"id":2666179,"name":"Azur Games","visibleName":"Azur Games"}
+                },"description":"&lt;p&gt;Use &lt;strong&gt;GitHub Copilot&lt;/strong&gt;&lt;/p&gt;"}
+                </script>
+                """,
+                encoding="utf-8",
+            )
+            record = {
+                "id": "123",
+                "url": url,
+                "description": "&lt;p&gt;Use &lt;strong&gt;GitHub Copilot&lt;/strong&gt;&lt;/p&gt;",
+                "skills": [],
+                "matches": [{"term": "GitHub Copilot", "fields": ["description"]}],
+            }
+
+            vacancy = scraper.vacancy_from_checkpoint_record(record, self.search_profile(), cache_dir)
+
+            self.assertIsNotNone(vacancy)
+            assert vacancy is not None
+            self.assertEqual(vacancy.title, "Middle Unity Developer (Marketing, Playable Ads)")
+            self.assertEqual(vacancy.company, "Azur Games")
+            self.assertEqual(vacancy.employer_id, "2666179")
+            self.assertEqual(vacancy.description, "Use GitHub Copilot")
+            self.assertTrue(scraper.checkpoint_record_needs_refresh(record, vacancy))
+
+    def test_resume_recalculates_matches_after_cache_refresh(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            cache_dir = Path(tmp) / "cache"
+            url = "https://hh.ru/vacancy/123"
+            cache_path = scraper.cache_path_for_url(cache_dir, "vacancies", url, "123")
+            cache_path.parent.mkdir(parents=True)
+            cache_path.write_text(
+                """
+                <h1 data-qa="vacancy-title">RAG Engineer</h1>
+                <div data-qa="vacancy-description">Build RAG systems</div>
+                """,
+                encoding="utf-8",
+            )
+            record = {
+                "id": "123",
+                "url": url,
+                "description": "&lt;p&gt;Use &lt;strong&gt;GitHub Copilot&lt;/strong&gt;&lt;/p&gt;",
+                "skills": [],
+                "matches": [{"term": "GitHub Copilot", "fields": ["description"]}],
+            }
+
+            vacancy = scraper.vacancy_from_checkpoint_record(record, self.search_profile(), cache_dir)
+
+            self.assertIsNotNone(vacancy)
+            assert vacancy is not None
+            self.assertEqual(vacancy.description, "Build RAG systems")
+            self.assertEqual(vacancy.matches, [scraper.Match(term="RAG", fields=["title", "description"])])
+
+    def test_resume_replaces_stale_plain_text_description_from_cache(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            cache_dir = Path(tmp) / "cache"
+            url = "https://hh.ru/vacancy/123"
+            cache_path = scraper.cache_path_for_url(cache_dir, "vacancies", url, "123")
+            cache_path.parent.mkdir(parents=True)
+            cache_path.write_text(
+                """
+                <h1 data-qa="vacancy-title">RAG Engineer</h1>
+                <div data-qa="vacancy-description">Build RAG systems</div>
+                """,
+                encoding="utf-8",
+            )
+            record = {
+                "id": "123",
+                "url": url,
+                "description": "Old stale text",
+                "skills": [],
+                "matches": [{"term": "RAG", "fields": ["title"]}],
+            }
+
+            vacancy = scraper.vacancy_from_checkpoint_record(record, self.search_profile(), cache_dir)
+
+            self.assertIsNotNone(vacancy)
+            assert vacancy is not None
+            self.assertEqual(vacancy.description, "Build RAG systems")
+            self.assertEqual(vacancy.matches, [scraper.Match(term="RAG", fields=["title", "description"])])
+
+    def test_resume_replaces_stale_non_empty_title_and_company_from_cache(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            cache_dir = Path(tmp) / "cache"
+            url = "https://hh.ru/vacancy/123"
+            cache_path = scraper.cache_path_for_url(cache_dir, "vacancies", url, "123")
+            cache_path.parent.mkdir(parents=True)
+            cache_path.write_text(
+                """
+                <h1 data-qa="vacancy-title">RAG Engineer</h1>
+                <a data-qa="vacancy-company-name" href="/employer/3797175">Right Co</a>
+                <div data-qa="vacancy-description">Build RAG systems</div>
+                """,
+                encoding="utf-8",
+            )
+            record = {
+                "id": "123",
+                "title": "Wrong Title",
+                "company": "Wrong Co",
+                "url": url,
+                "description": "&lt;p&gt;Build RAG systems&lt;/p&gt;",
+                "skills": [],
+                "matches": [{"term": "RAG", "fields": ["description"]}],
+            }
+
+            vacancy = scraper.vacancy_from_checkpoint_record(record, self.search_profile(), cache_dir)
+
+            self.assertIsNotNone(vacancy)
+            assert vacancy is not None
+            self.assertEqual(vacancy.title, "RAG Engineer")
+            self.assertEqual(vacancy.company, "Right Co")
+            self.assertTrue(scraper.checkpoint_record_needs_refresh(record, vacancy))
 
     def test_vacancy_record_preserves_vacancy_attributes(self) -> None:
         vacancy = parse_vacancy(

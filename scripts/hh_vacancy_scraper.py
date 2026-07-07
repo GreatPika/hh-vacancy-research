@@ -314,6 +314,18 @@ def compact_inline_text(value: str) -> str:
     return re.sub(r"\s+", " ", compact_text(value)).strip()
 
 
+def html_description_to_text(value: str) -> str:
+    unescaped = html.unescape(value)
+    with_breaks = re.sub(
+        r"</?(?:p|div|br|li|ul|ol|h[1-6])(?:\s+[^>]*)?/?>",
+        "\n",
+        unescaped,
+        flags=re.I,
+    )
+    without_tags = re.sub(r"<[^>]+>", "", with_breaks)
+    return compact_text(html.unescape(without_tags))
+
+
 def strip_attribute_label(value: str) -> str:
     return re.sub(
         r"^Формат работы\s*:\s*",
@@ -515,6 +527,97 @@ def json_string_from_match(match: re.Match[str]) -> str:
         return ""
 
 
+def json_object_at(value: str, object_start: int) -> dict[str, object]:
+    if object_start < 0 or object_start >= len(value) or value[object_start] != "{":
+        return {}
+    depth = 0
+    in_string = False
+    escaped = False
+    for index in range(object_start, len(value)):
+        char = value[index]
+        if in_string:
+            if escaped:
+                escaped = False
+            elif char == "\\":
+                escaped = True
+            elif char == '"':
+                in_string = False
+            continue
+        if char == '"':
+            in_string = True
+        elif char == "{":
+            depth += 1
+        elif char == "}":
+            depth -= 1
+            if depth == 0:
+                raw = value[object_start : index + 1]
+                for candidate in (raw, html.unescape(raw)):
+                    try:
+                        parsed = json.loads(candidate)
+                    except json.JSONDecodeError:
+                        continue
+                    return parsed if isinstance(parsed, dict) else {}
+                return {}
+    return {}
+
+
+def extract_short_vacancy_state(vacancy_id: str, page_html: str) -> dict[str, object]:
+    vacancy_key = json.dumps(str(vacancy_id), ensure_ascii=False)
+    for match in re.finditer(rf"{re.escape(vacancy_key)}\s*:", page_html):
+        value_start = match.end()
+        while value_start < len(page_html) and page_html[value_start].isspace():
+            value_start += 1
+        if value_start >= len(page_html) or page_html[value_start] != "{":
+            continue
+        entry_start = value_start
+        entry = json_object_at(page_html, entry_start)
+        short_vacancy = entry.get("shortVacancy")
+        if isinstance(short_vacancy, dict):
+            short_id = short_vacancy.get("vacancyId")
+            if short_id is not None and str(short_id) != str(vacancy_id):
+                continue
+            return short_vacancy
+
+    for match in re.finditer(r'"shortVacancy"\s*:', page_html):
+        short_start = match.end()
+        while short_start < len(page_html) and page_html[short_start].isspace():
+            short_start += 1
+        if short_start >= len(page_html) or page_html[short_start] != "{":
+            continue
+        short_vacancy = json_object_at(page_html, short_start)
+        if str(short_vacancy.get("vacancyId", "")) == str(vacancy_id):
+            return short_vacancy
+    return {}
+
+
+def short_vacancy_title(short_vacancy: dict[str, object]) -> str:
+    title = short_vacancy.get("name")
+    return compact_text(title) if isinstance(title, str) else ""
+
+
+def short_vacancy_company(short_vacancy: dict[str, object]) -> str:
+    company = short_vacancy.get("company")
+    if not isinstance(company, dict):
+        return ""
+    for key in ("visibleName", "name"):
+        value = company.get(key)
+        if isinstance(value, str) and value.strip():
+            return compact_text(value)
+    return ""
+
+
+def short_vacancy_employer_id(short_vacancy: dict[str, object]) -> str:
+    company = short_vacancy.get("company")
+    if not isinstance(company, dict):
+        return ""
+    value = company.get("id")
+    if isinstance(value, int):
+        return str(value)
+    if isinstance(value, str) and value.strip().isdigit():
+        return value.strip()
+    return ""
+
+
 def find_hiring_organization_name(value: object) -> str:
     if isinstance(value, dict):
         organization = value.get("hiringOrganization")
@@ -626,10 +729,15 @@ def extract_employer_industry_from_employer_page(page_html: str) -> str:
 def parse_vacancy(vacancy_id: str, page_html: str) -> Vacancy:
     parser = VacancyPageParser()
     parser.feed(page_html)
+    short_vacancy = extract_short_vacancy_state(vacancy_id, page_html)
 
-    title = compact_text(" ".join(parser.title_parts)) or extract_title_from_meta(page_html)
-    company = extract_company_from_page(page_html, parser)
-    employer_id = parser.employer_id
+    title = (
+        compact_text(" ".join(parser.title_parts))
+        or extract_title_from_meta(page_html)
+        or short_vacancy_title(short_vacancy)
+    )
+    company = extract_company_from_page(page_html, parser) or short_vacancy_company(short_vacancy)
+    employer_id = parser.employer_id or short_vacancy_employer_id(short_vacancy)
     salary = compact_inline_text(" ".join(parser.salary_parts))
     experience = compact_inline_text(" ".join(parser.experience_parts))
     work_format = strip_attribute_label(" ".join(parser.work_format_parts))
@@ -641,7 +749,7 @@ def parse_vacancy(vacancy_id: str, page_html: str) -> Vacancy:
         if match:
             try:
                 raw_description = json.loads(f'"{match.group(1)}"')
-                description = compact_text(re.sub(r"<[^>]+>", "\n", raw_description))
+                description = html_description_to_text(raw_description)
             except json.JSONDecodeError:
                 pass
 
@@ -690,8 +798,11 @@ def enrich_employer_industry(
 
 def checkpoint_record_needs_refresh(record: dict[str, object], vacancy: Vacancy) -> bool:
     return (
-        str(record.get("employer_id", "")) != vacancy.employer_id
+        str(record.get("title", "")) != vacancy.title
+        or str(record.get("company", "")) != vacancy.company
+        or str(record.get("employer_id", "")) != vacancy.employer_id
         or str(record.get("employer_industry", "")) != vacancy.employer_industry
+        or str(record.get("description", "")) != vacancy.description
     )
 
 
@@ -1056,7 +1167,11 @@ def parse_cached_vacancy_from_record(record: dict[str, object], cache_dir: Path)
 
 
 def fill_missing_vacancy_fields(vacancy: Vacancy, cached_vacancy: Vacancy) -> None:
-    if not vacancy.company:
+    if cached_vacancy.title:
+        vacancy.title = cached_vacancy.title
+    if cached_vacancy.description:
+        vacancy.description = cached_vacancy.description
+    if cached_vacancy.company:
         vacancy.company = cached_vacancy.company
     if cached_vacancy.employer_id:
         vacancy.employer_id = cached_vacancy.employer_id
@@ -1078,6 +1193,7 @@ def vacancy_from_checkpoint_record(
         cached_vacancy = parse_cached_vacancy_from_record(record, cache_dir)
         if cached_vacancy is not None:
             fill_missing_vacancy_fields(vacancy, cached_vacancy)
+            vacancy.matches = matching_terms(vacancy, profile)
         return vacancy
 
     vacancy = cached_vacancy_from_record(record, profile, cache_dir)
