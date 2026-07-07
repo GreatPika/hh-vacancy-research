@@ -181,6 +181,7 @@ class Vacancy:
     title: str
     description: str
     url: str
+    search_queries: list[str] = field(default_factory=list)
     company: str = ""
     employer_id: str = ""
     salary: str = ""
@@ -356,6 +357,10 @@ def unique(values: Iterable[str]) -> list[str]:
         seen.add(normalized)
         result.append(normalized)
     return result
+
+
+def string_list(value: object) -> list[str]:
+    return [item for item in value if isinstance(item, str)] if isinstance(value, list) else []
 
 
 def certificate_error_help() -> str:
@@ -809,6 +814,7 @@ def checkpoint_record_needs_refresh(record: dict[str, object], vacancy: Vacancy)
         or str(record.get("employer_id", "")) != vacancy.employer_id
         or str(record.get("employer_industry", "")) != vacancy.employer_industry
         or str(record.get("description", "")) != vacancy.description
+        or string_list(record.get("search_queries")) != vacancy.search_queries
     )
 
 
@@ -912,6 +918,7 @@ def collect_vacancies(
     search_results: SearchResults,
 ) -> list[Vacancy]:
     fingerprint = profile_fingerprint(profile)
+    queries_by_vacancy = search_results.queries_by_vacancy
     vacancy_id_set = set(vacancy_ids)
     checkpoint = load_checkpoint(args.checkpoint_jsonl, fingerprint)
     processed_ids: set[str] = set()
@@ -928,6 +935,7 @@ def collect_vacancies(
                     "entry/file if you intentionally want to reprocess it.",
                     kind="checkpoint",
                 )
+            vacancy.search_queries = list(queries_by_vacancy.get(vacancy_id, vacancy.search_queries))
             enrich_employer_industry(args, profile, vacancy)
             if checkpoint_record_needs_refresh(record, vacancy):
                 append_checkpoint(
@@ -977,6 +985,7 @@ def collect_vacancies(
                 kind="blocked",
             )
         vacancy = parse_vacancy(vacancy_id, page_html)
+        vacancy.search_queries = list(queries_by_vacancy.get(vacancy_id, []))
         vacancy.matches = matching_terms(vacancy, profile)
 
         if not (vacancy.title or vacancy.company or vacancy.description or vacancy.skills):
@@ -1045,6 +1054,7 @@ def vacancy_to_record(
             "work_format": vacancy.work_format,
             "employer_industry": vacancy.employer_industry,
             "url": vacancy.url,
+            "search_queries": vacancy.search_queries,
             "matched_terms": [],
             "matches": [],
             "kept": False,
@@ -1060,6 +1070,7 @@ def vacancy_to_record(
         "work_format": vacancy.work_format,
         "employer_industry": vacancy.employer_industry,
         "url": vacancy.url,
+        "search_queries": vacancy.search_queries,
         "matched_terms": vacancy.matched_terms,
         "matches": [match_to_record(match) for match in vacancy.matches],
         "kept": kept,
@@ -1118,6 +1129,8 @@ def match_from_record(record: dict[str, object]) -> Match:
 def vacancy_from_record(record: dict[str, object], profile: SearchProfile) -> Vacancy:
     raw_skills = record.get("skills", [])
     skills = raw_skills if isinstance(raw_skills, list) else []
+    raw_search_queries = record.get("search_queries", [])
+    search_queries = raw_search_queries if isinstance(raw_search_queries, list) else []
     raw_matches = record.get("matches", [])
     matches = raw_matches if isinstance(raw_matches, list) else []
     vacancy = Vacancy(
@@ -1125,6 +1138,7 @@ def vacancy_from_record(record: dict[str, object], profile: SearchProfile) -> Va
         title=str(record.get("title", "")),
         description=str(record.get("description", "")),
         url=str(record.get("url", "")),
+        search_queries=[str(item) for item in search_queries if isinstance(item, str)],
         company=str(record.get("company", "")),
         employer_id=str(record.get("employer_id", "")),
         salary=str(record.get("salary", "")),

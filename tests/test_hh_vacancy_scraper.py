@@ -11,6 +11,16 @@ from scripts.hh_vacancy_scraper import parse_vacancy, vacancy_to_record
 
 
 class VacancyParsingTest(unittest.TestCase):
+    def search_results(
+        self,
+        ids_by_group: dict[str, list[str]] | None = None,
+        queries_by_vacancy: dict[str, list[str]] | None = None,
+    ) -> scraper.SearchResults:
+        return scraper.SearchResults(
+            ids_by_group=ids_by_group or {"RAG": ["123"]},
+            queries_by_vacancy=queries_by_vacancy or {"123": ["RAG"]},
+        )
+
     def scraper_args(self, root: Path) -> argparse.Namespace:
         return argparse.Namespace(
             cache_dir=root / "cache",
@@ -381,7 +391,7 @@ class VacancyParsingTest(unittest.TestCase):
                     "</template>"
                 ),
             ):
-                vacancies = scraper.collect_vacancies(args, profile, ["123"], {"RAG": ["123"]})
+                vacancies = scraper.collect_vacancies(args, profile, ["123"], self.search_results())
 
             self.assertEqual(vacancies[0].employer_id, "3797175")
             self.assertEqual(vacancies[0].employer_industry, "Розничная торговля")
@@ -437,7 +447,7 @@ class VacancyParsingTest(unittest.TestCase):
                     "</template>"
                 ),
             ) as fetch_url:
-                vacancies = scraper.collect_vacancies(args, profile, ["123"], {"RAG": ["123"]})
+                vacancies = scraper.collect_vacancies(args, profile, ["123"], self.search_results())
 
             self.assertEqual(vacancies[0].employer_id, "3797175")
             self.assertEqual(vacancies[0].employer_industry, "Розничная торговля")
@@ -487,7 +497,7 @@ class VacancyParsingTest(unittest.TestCase):
                     "</template>"
                 ),
             ) as fetch_url:
-                vacancies = scraper.collect_vacancies(args, profile, ["123"], {"RAG": ["123"]})
+                vacancies = scraper.collect_vacancies(args, profile, ["123"], self.search_results())
 
             self.assertEqual(vacancies[0].employer_id, "3797175")
             self.assertEqual(vacancies[0].employer_industry, "Розничная торговля")
@@ -534,7 +544,7 @@ class VacancyParsingTest(unittest.TestCase):
                 "fetch_url",
                 side_effect=scraper.FetchError("blocked", kind="blocked"),
             ):
-                vacancies = scraper.collect_vacancies(args, profile, ["123"], {"RAG": ["123"]})
+                vacancies = scraper.collect_vacancies(args, profile, ["123"], self.search_results())
 
             self.assertEqual(vacancies[0].employer_id, "3797175")
             self.assertEqual(vacancies[0].employer_industry, "")
@@ -589,7 +599,7 @@ class VacancyParsingTest(unittest.TestCase):
                 )
 
             with patch.object(scraper, "fetch_url", side_effect=fetch_url):
-                vacancies = scraper.collect_vacancies(args, profile, ["123"], {"RAG": ["123"]})
+                vacancies = scraper.collect_vacancies(args, profile, ["123"], self.search_results())
 
             self.assertEqual(vacancies[0].employer_id, "3797175")
             self.assertEqual(fetched_urls, [scraper.employer_profile_url("3797175")])
@@ -640,8 +650,8 @@ class VacancyParsingTest(unittest.TestCase):
                     "</template>"
                 ),
             ):
-                first = scraper.collect_vacancies(args, profile, ["123"], {"RAG": ["123"]})
-                second = scraper.collect_vacancies(args, profile, ["123"], {"RAG": ["123"]})
+                first = scraper.collect_vacancies(args, profile, ["123"], self.search_results())
+                second = scraper.collect_vacancies(args, profile, ["123"], self.search_results())
 
             self.assertEqual(first[0].employer_id, "3797175")
             self.assertEqual(second[0].employer_id, "3797175")
@@ -792,6 +802,20 @@ class VacancyParsingTest(unittest.TestCase):
         self.assertEqual(record["work_format"], "удалённо")
         self.assertEqual(record["employer_industry"], "")
 
+    def test_vacancy_record_includes_exact_search_queries(self) -> None:
+        vacancy = scraper.Vacancy(
+            vacancy_id="123",
+            title="ML Engineer",
+            description="Build RAG systems",
+            url="https://hh.ru/vacancy/123",
+            search_queries=["RAG", "LangChain"],
+            matches=[scraper.Match(term="AI", fields=["description"])],
+        )
+
+        record = vacancy_to_record(vacancy, kept=True, reason="")
+
+        self.assertEqual(record["search_queries"], ["RAG", "LangChain"])
+
     def test_search_url_includes_native_work_format_filters(self) -> None:
         hh = scraper.HhSettings(
             area="2",
@@ -886,6 +910,35 @@ class VacancyParsingTest(unittest.TestCase):
                 "303": ["LangChain"],
             },
         )
+
+    def test_collect_vacancies_sets_search_queries_for_new_and_checkpointed_vacancies(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            profile = self.search_profile()
+            args = self.scraper_args(root)
+            vacancy_url = "https://hh.ru/vacancy/123"
+            vacancy_cache = scraper.cache_path_for_url(args.cache_dir, "vacancies", vacancy_url, "123")
+            vacancy_cache.parent.mkdir(parents=True)
+            vacancy_cache.write_text(
+                """
+                <h1 data-qa="vacancy-title">RAG Engineer</h1>
+                <div data-qa="vacancy-description">Build RAG systems</div>
+                """,
+                encoding="utf-8",
+            )
+            search_results = scraper.SearchResults(
+                ids_by_group={"RAG": ["123"]},
+                queries_by_vacancy={"123": ["RAG", "retrieval augmented generation"]},
+            )
+
+            with patch.object(scraper, "fetch_url", return_value=vacancy_cache.read_text(encoding="utf-8")):
+                first = scraper.collect_vacancies(args, profile, ["123"], search_results)
+                second = scraper.collect_vacancies(args, profile, ["123"], search_results)
+
+            self.assertEqual(first[0].search_queries, ["RAG", "retrieval augmented generation"])
+            self.assertEqual(second[0].search_queries, ["RAG", "retrieval augmented generation"])
+            records = list(scraper.iter_checkpoint_records(args.checkpoint_jsonl))
+            self.assertEqual(records[-1]["search_queries"], ["RAG", "retrieval augmented generation"])
 
     def test_load_profile_accepts_native_work_format_filters(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
