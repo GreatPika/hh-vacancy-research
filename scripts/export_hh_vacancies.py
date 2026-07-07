@@ -26,6 +26,7 @@ VACANCY_HEADERS = [
     "Формат работы",
     "Отрасль работодателя",
     "Ссылка",
+    "Найдена по словам",
     "Поисковые группы",
     "Поля совпадения",
     "Навыки",
@@ -158,6 +159,10 @@ def matched_terms(vacancy: dict[str, object]) -> str:
     )
 
 
+def search_queries(vacancy: dict[str, object]) -> str:
+    return ", ".join(string_list(vacancy.get("search_queries")))
+
+
 def structured_matched_terms(vacancy: dict[str, object]) -> list[str]:
     terms = vacancy.get("matched_terms")
     if isinstance(terms, list):
@@ -182,6 +187,7 @@ def rows_for(vacancies: list[dict[str, object]]) -> list[list[str]]:
                 str(vacancy.get("work_format", "")),
                 str(vacancy.get("employer_industry", "")),
                 str(vacancy.get("url", "")),
+                search_queries(vacancy),
                 matched_terms(vacancy),
                 match_fields(vacancy),
                 ", ".join(str(skill) for skill in object_list(vacancy.get("skills"))),
@@ -208,6 +214,8 @@ def validate_input(data: object, source_path: Path) -> dict[str, object]:
                 raise ValueError(f"{source_path}: vacancies[{index}].{field} must be a string")
         if "skills" in vacancy and not isinstance(vacancy["skills"], list):
             raise ValueError(f"{source_path}: vacancies[{index}].skills must be a list")
+        if "search_queries" in vacancy and not isinstance(vacancy["search_queries"], list):
+            raise ValueError(f"{source_path}: vacancies[{index}].search_queries must be a list")
         if "matches" in vacancy and not isinstance(vacancy["matches"], list):
             raise ValueError(f"{source_path}: vacancies[{index}].matches must be a list")
     return data
@@ -290,6 +298,7 @@ def write_xlsx(path: Path, rows: list[list[str]]) -> None:
         "I": 20,
         "J": 42,
         "K": 100,
+        "L": 100,
     }
     for column, width in widths.items():
         sheet.column_dimensions[column].width = width
