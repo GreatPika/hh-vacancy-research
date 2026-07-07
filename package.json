@@ -1,6 +1,6 @@
 {
   "name": "hh-vacancy-research-skill",
-  "version": "0.1.7",
+  "version": "0.1.8",
   "description": "Installer CLI for the hh-vacancy-research Codex skill.",
   "type": "module",
   "bin": {
